@@ -32,6 +32,7 @@ mech_sources = 			\
 	mech-pattern.c		\
 	mech-renderer.c		\
 	mech-seat.c		\
+	mech-scrollable.c	\
 	mech-slider.c		\
 	mech-stage.c		\
 	mech-style.c		\
