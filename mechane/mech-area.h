@@ -47,6 +47,11 @@ struct _MechAreaClass
   void             (* draw)               (MechArea  *area,
                                            cairo_t   *cr);
 
+  void             (* add)                (MechArea  *area,
+                                           MechArea  *child);
+  void             (* remove)             (MechArea  *area,
+                                           MechArea  *child);
+
   gdouble          (* get_extent)         (MechArea  *area,
                                            MechAxis   axis);
   gdouble          (* get_second_extent)  (MechArea  *area,
@@ -62,11 +67,25 @@ struct _MechAreaClass
 
 GType            mech_area_get_type             (void) G_GNUC_CONST;
 
+void             mech_area_add                  (MechArea       *area,
+						 MechArea       *child);
+void             mech_area_remove               (MechArea       *area,
+						 MechArea       *child);
+gint             mech_area_get_children         (MechArea       *area,
+						 MechArea     ***children);
+
+MechArea       * mech_area_get_parent           (MechArea       *area);
+gboolean         mech_area_is_ancestor          (MechArea       *area,
+						 MechArea       *ancestor);
+
 gdouble          mech_area_get_extent           (MechArea       *area,
 						 MechAxis        axis);
 gdouble          mech_area_get_second_extent    (MechArea       *area,
 						 MechAxis        axis,
 						 gdouble         other_value);
+
+void             mech_area_set_parent           (MechArea       *area,
+						 MechArea       *parent);
 
 G_END_DECLS
 
