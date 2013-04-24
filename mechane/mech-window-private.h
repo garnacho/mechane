@@ -15,20 +15,16 @@
  * License along with this library. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __MECHANE_H__
-#define __MECHANE_H__
+#ifndef __MECH_WINDOW_PRIVATE_H__
+#define __MECH_WINDOW_PRIVATE_H__
 
-#include <glib-object.h>
+#include <mechane/mech-stage-private.h>
+#include <mechane/mech-window.h>
 
 G_BEGIN_DECLS
 
-/* Base */
-#include <mechane/mech-enum-types.h>
-#include <mechane/mech-enums.h>
-#include <mechane/mech-events.h>
-#include <mechane/mech-area.h>
-#include <mechane/mech-window.h>
+MechStage  * _mech_window_get_stage          (MechWindow  *window);
 
 G_END_DECLS
 
-#endif /* __MECHANE_H__ */
+#endif /* __MECH_WINDOW_PRIVATE_H__ */
