@@ -6,7 +6,8 @@ BUILT_SOURCES = 		\
 
 mech_sources = 			\
 	$(BUILT_SOURCES)	\
-	mech-area.c
+	mech-area.c		\
+	mech-events.c
 
 AM_CPPFLAGS = $(MECH_DEPS_CFLAGS)
 

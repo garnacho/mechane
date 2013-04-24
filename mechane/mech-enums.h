@@ -23,6 +23,33 @@
 G_BEGIN_DECLS
 
 typedef enum {
+  MECH_FOCUS_IN       = 1,
+  MECH_FOCUS_OUT      = 2,
+  MECH_ENTER          = 3,
+  MECH_LEAVE          = 4,
+  MECH_KEY_PRESS      = 5,
+  MECH_KEY_RELEASE    = 6,
+  MECH_MOTION         = 7,
+  MECH_BUTTON_PRESS   = 8,
+  MECH_BUTTON_RELEASE = 9,
+  MECH_SCROLL         = 10,
+  MECH_TOUCH_DOWN     = 11,
+  MECH_TOUCH_MOTION   = 12,
+  MECH_TOUCH_UP       = 13
+} MechEventType;
+
+typedef enum {
+  MECH_NONE           = 0,
+  MECH_KEY_MASK       = 1 << MECH_KEY_PRESS,
+  MECH_FOCUS_MASK     = 1 << MECH_FOCUS_IN,
+  MECH_MOTION_MASK    = 1 << MECH_MOTION,
+  MECH_BUTTON_MASK    = 1 << MECH_BUTTON_PRESS,
+  MECH_CROSSING_MASK  = 1 << MECH_ENTER,
+  MECH_SCROLL_MASK    = 1 << MECH_SCROLL,
+  MECH_TOUCH_MASK     = 1 << MECH_TOUCH_DOWN
+} MechEventMask;
+
+typedef enum {
   MECH_AXIS_X,
   MECH_AXIS_Y
 } MechAxis;
