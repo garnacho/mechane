@@ -9,6 +9,7 @@ mech_sources = 			\
 	mech-area.c		\
 	mech-events.c		\
 	mech-stage.c		\
+	mech-types.c		\
 	mech-window.c
 
 AM_CPPFLAGS = $(MECH_DEPS_CFLAGS)
