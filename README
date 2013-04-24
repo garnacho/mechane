@@ -1,0 +1,12 @@
+Introduction
+============
+
+Mechane is a concise wrapper to the windowing system, with all expected modern
+features integrated in the core. There's several widgets, ranging from simple
+to complex, exercising these features. Even though it internally has a backend
+abstraction, there is only a wayland implementation.
+
+Installation
+============
+
+See file 'INSTALL'
