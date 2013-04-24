@@ -53,6 +53,9 @@ gboolean    _mech_stage_set_size            (MechStage       *stage,
 GNode     * _mech_stage_node_new            (MechArea        *area);
 void        _mech_stage_node_free           (GNode           *node);
 
+void        _mech_stage_set_root            (MechStage       *stage,
+                                             MechArea        *area);
+
 gboolean    _mech_stage_add                 (GNode           *parent_node,
                                              GNode           *child_node);
 gboolean    _mech_stage_remove              (GNode           *child_node);

@@ -20,9 +20,10 @@
 
 typedef struct _MechArea MechArea;
 
-#include <mechane/mech-enums.h>
 #include <cairo/cairo.h>
 #include <glib-object.h>
+#include <mechane/mech-enums.h>
+#include <mechane/mech-window.h>
 
 G_BEGIN_DECLS
 
@@ -86,6 +87,9 @@ gdouble          mech_area_get_second_extent    (MechArea       *area,
 
 void             mech_area_set_parent           (MechArea       *area,
 						 MechArea       *parent);
+
+MechWindow     * mech_area_get_window           (MechArea       *area);
+
 
 G_END_DECLS
 

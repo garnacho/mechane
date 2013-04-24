@@ -18,6 +18,7 @@
 #include <math.h>
 
 #include <mechane/mech-stage-private.h>
+#include <mechane/mech-area-private.h>
 #include <mechane/mech-marshal.h>
 #include <mechane/mech-enums.h>
 #include <mechane/mech-events.h>
@@ -288,4 +289,14 @@ _mech_stage_set_size (MechStage *stage,
   priv->height = MAX (1, *height);
 
   return TRUE;
+}
+
+void
+_mech_stage_set_root (MechStage *stage,
+                      MechArea  *area)
+{
+  MechStagePrivate *priv = mech_stage_get_instance_private (stage);
+
+  g_assert (!priv->areas);
+  priv->areas = (StageNode *) _mech_area_get_node (area);
 }

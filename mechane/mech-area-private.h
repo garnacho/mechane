@@ -23,7 +23,11 @@
 
 G_BEGIN_DECLS
 
+MechStage      * _mech_area_get_stage             (MechArea          *area);
 GNode          * _mech_area_get_node              (MechArea          *area);
+
+void             _mech_area_make_window_root      (MechArea          *area,
+                                                   MechWindow        *window);
 
 G_END_DECLS
 

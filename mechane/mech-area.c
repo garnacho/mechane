@@ -20,6 +20,7 @@
 
 #include <mechane/mech-marshal.h>
 #include <mechane/mech-stage-private.h>
+#include <mechane/mech-window-private.h>
 #include <mechane/mech-area-private.h>
 
 typedef struct _MechAreaPrivate MechAreaPrivate;
@@ -36,6 +37,8 @@ struct _MechAreaPrivate
   guint need_width_request  : 1;
   guint need_height_request : 1;
 };
+
+static GQuark quark_window = 0;
 
 G_DEFINE_TYPE_WITH_PRIVATE (MechArea, mech_area, G_TYPE_INITIALLY_UNOWNED)
 
@@ -136,6 +139,8 @@ mech_area_class_init (MechAreaClass *klass)
   klass->get_second_extent = mech_area_get_second_extent_impl;
   klass->add = mech_area_add_impl;
   klass->remove = mech_area_remove_impl;
+
+  quark_window = g_quark_from_static_string ("MECH_QUARK_WINDOW");
 }
 
 gdouble
@@ -146,6 +151,9 @@ mech_area_get_extent (MechArea *area,
 
   g_return_val_if_fail (MECH_IS_AREA (area), 0);
   g_return_val_if_fail (axis == MECH_AXIS_X || axis == MECH_AXIS_Y, 0);
+
+  if (!_mech_area_get_stage (area))
+    return 0;
 
   priv = mech_area_get_instance_private (area);
 
@@ -181,6 +189,9 @@ mech_area_get_second_extent (MechArea *area,
   g_return_val_if_fail (MECH_IS_AREA (area), 0);
   g_return_val_if_fail (axis == MECH_AXIS_X || axis == MECH_AXIS_Y, 0);
 
+  if (!_mech_area_get_stage (area))
+    return 0;
+
   priv = mech_area_get_instance_private (area);
 
   if ((axis == MECH_AXIS_X && priv->need_width_request) ||
@@ -203,6 +214,41 @@ mech_area_get_second_extent (MechArea *area,
     }
 
   return (axis == MECH_AXIS_X) ? priv->width_requested : priv->height_requested;
+}
+
+void
+_mech_area_make_window_root (MechArea   *area,
+                             MechWindow *window)
+{
+  g_object_set_qdata ((GObject *) area, quark_window, window);
+  _mech_stage_set_root (_mech_window_get_stage (window), area);
+}
+
+MechStage *
+_mech_area_get_stage (MechArea *area)
+{
+  MechWindow *window;
+
+  window = mech_area_get_window (area);
+
+  if (!window)
+    return NULL;
+
+  return _mech_window_get_stage (window);
+}
+
+MechWindow *
+mech_area_get_window (MechArea *area)
+{
+  GNode *node, *root;
+
+  node = _mech_area_get_node (area);
+
+  if (!node)
+    return NULL;
+
+  root = g_node_get_root (node);
+  return g_object_get_qdata (root->data, quark_window);
 }
 
 gboolean
