@@ -81,6 +81,14 @@ gint             mech_area_get_children         (MechArea       *area,
 gboolean         mech_area_is_ancestor          (MechArea       *area,
 						 MechArea       *ancestor);
 
+void             mech_area_set_matrix           (MechArea             *area,
+                                                 const cairo_matrix_t *matrix);
+gboolean         mech_area_get_matrix           (MechArea             *area,
+                                                 cairo_matrix_t       *matrix);
+gboolean         mech_area_get_relative_matrix  (MechArea             *area,
+                                                 MechArea             *relative_to,
+                                                 cairo_matrix_t       *matrix_ret);
+
 gdouble          mech_area_get_extent           (MechArea       *area,
 						 MechAxis        axis);
 gdouble          mech_area_get_second_extent    (MechArea       *area,
@@ -97,6 +105,24 @@ void             mech_area_allocate_size        (MechArea          *area,
 						 cairo_rectangle_t *size);
 void             mech_area_get_allocated_size   (MechArea          *area,
 						 cairo_rectangle_t *size);
+
+void             mech_area_transform_points     (MechArea          *area,
+                                                 MechArea          *relative_to,
+                                                 MechPoint         *points,
+                                                 gint               n_points);
+void             mech_area_transform_point      (MechArea          *area,
+                                                 MechArea          *relative_to,
+                                                 gdouble           *x,
+                                                 gdouble           *y);
+void             mech_area_transform_corners    (MechArea          *area,
+                                                 MechArea          *relative_to,
+                                                 MechPoint         *top_left,
+                                                 MechPoint         *top_right,
+                                                 MechPoint         *bottom_left,
+                                                 MechPoint         *bottom_right);
+void             mech_area_get_extents          (MechArea          *area,
+                                                 MechArea          *relative_to,
+                                                 cairo_rectangle_t *extents);
 
 void             mech_area_set_visible          (MechArea          *area,
 						 gboolean           visible);

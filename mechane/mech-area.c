@@ -23,14 +23,26 @@
 #include <mechane/mech-window-private.h>
 #include <mechane/mech-area-private.h>
 
+#define MATRIX_IS_EQUAL(a,b) \
+  ((a).xx == (b).xx &&       \
+   (a).yx == (b).yx &&       \
+   (a).xy == (b).xy &&       \
+   (a).yy == (b).yy &&       \
+   (a).x0 == (b).x0 &&       \
+   (a).y0 == (b).y0)
+
+#define MATRIX_IS_IDENTITY(m)     \
+  ((m).xx == 1 && (m).yx == 0 &&  \
+   (m).xy == 0 && (m).yy == 1 &&  \
+   (m).x0 == 0 && (m).y0 == 0)
+
 typedef struct _MechAreaPrivate MechAreaPrivate;
-typedef struct _MechAreaDelegateData MechAreaDelegateData;
-typedef struct _PreferredAxisSize PreferredAxisSize;
 
 enum {
   PROP_0,
   PROP_VISIBLE,
-  PROP_DEPTH
+  PROP_DEPTH,
+  PROP_MATRIX
 };
 
 enum {
@@ -43,8 +55,9 @@ struct _MechAreaPrivate
   GNode *node;
   MechArea *parent;
   GPtrArray *children;
+  cairo_matrix_t matrix;
 
-  /* In stage coordinates */
+  /* In stage coordinates, not affected by matrix. */
   cairo_rectangle_t rect;
 
   gdouble width_requested;
@@ -52,6 +65,7 @@ struct _MechAreaPrivate
 
   gint depth;
 
+  guint is_identity         : 1;
   guint visible             : 1;
   guint need_width_request  : 1;
   guint need_height_request : 1;
@@ -69,6 +83,8 @@ mech_area_init (MechArea *area)
   MechAreaPrivate *priv = mech_area_get_instance_private (area);
 
   priv->children = g_ptr_array_new ();
+  priv->is_identity = TRUE;
+  cairo_matrix_init_identity (&priv->matrix);
 
   /* Allocate stage node, even if the area isn't attached to none yet */
   priv->node = _mech_stage_node_new (area);
@@ -96,6 +112,9 @@ mech_area_set_property (GObject      *object,
     case PROP_DEPTH:
       mech_area_set_depth (area, g_value_get_int (value));
       break;
+    case PROP_MATRIX:
+      mech_area_set_matrix (area, g_value_get_boxed (value));
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, param_id, pspec);
     }
@@ -119,6 +138,9 @@ mech_area_get_property (GObject    *object,
       break;
     case PROP_DEPTH:
       g_value_set_int (value, priv->depth);
+      break;
+    case PROP_MATRIX:
+      g_value_set_boxed (value, &priv->matrix);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, param_id, pspec);
@@ -270,6 +292,14 @@ mech_area_class_init (MechAreaClass *klass)
                                                      G_MININT, G_MAXINT, 0,
                                                      G_PARAM_READWRITE |
                                                      G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (object_class,
+                                   PROP_MATRIX,
+                                   g_param_spec_boxed ("matrix",
+                                                       "Matrix",
+                                                       "Transformation matrix",
+                                                       CAIRO_GOBJECT_TYPE_MATRIX,
+                                                       G_PARAM_READWRITE |
+                                                       G_PARAM_STATIC_STRINGS));
   signals[VISIBILITY_CHANGED] =
     g_signal_new ("visibility-changed",
                   G_TYPE_FROM_CLASS (klass),
@@ -280,6 +310,26 @@ mech_area_class_init (MechAreaClass *klass)
                   G_TYPE_NONE, 0);
 
   quark_window = g_quark_from_static_string ("MECH_QUARK_WINDOW");
+}
+
+void
+mech_area_get_extents (MechArea          *area,
+                       MechArea          *relative_to,
+                       cairo_rectangle_t *extents)
+{
+  MechPoint tl, tr, bl, br;
+
+  g_return_if_fail (MECH_IS_AREA (area));
+  g_return_if_fail (!relative_to || MECH_IS_AREA (relative_to));
+  g_return_if_fail (extents != NULL);
+
+  mech_area_transform_corners (area, relative_to,
+                               &tl, &tr, &bl, &br);
+
+  extents->x = floor (MIN (MIN (tl.x, tr.x), MIN (bl.x, br.x)));
+  extents->y = floor (MIN (MIN (tl.y, tr.y), MIN (bl.y, br.y)));
+  extents->width = ceil (MAX (MAX (tl.x, tr.x), MAX (bl.x, br.x)) - extents->x);
+  extents->height = ceil (MAX (MAX (tl.y, tr.y), MAX (bl.y, br.y)) - extents->y);
 }
 
 gdouble
@@ -637,6 +687,275 @@ mech_area_remove (MechArea *area,
     }
 }
 
+gboolean
+_mech_area_get_visible_rect (MechArea          *area,
+                             cairo_rectangle_t *rect)
+{
+  cairo_rectangle_t size, visible;
+  MechPoint tl, tr, bl, br;
+  gdouble x1, x2, y1, y2;
+  GNode *node;
+
+  node = _mech_area_get_node (area);
+  mech_area_get_allocated_size (area, &size);
+
+  if (!node->parent)
+    {
+      if (rect)
+        *rect = size;
+      return TRUE;
+    }
+
+  while (node->parent)
+    node = node->parent;
+
+  mech_area_transform_corners (node->data, area,
+                               &tl, &tr, &bl, &br);
+
+  x1 = MIN (MIN (tl.x, tr.x), MIN (bl.x, br.x));
+  x2 = MAX (MAX (tl.x, tr.x), MAX (bl.x, br.x));
+  y1 = MIN (MIN (tl.y, tr.y), MIN (bl.y, br.y));
+  y2 = MAX (MAX (tl.y, tr.y), MAX (bl.y, br.y));
+
+  if (rect)
+    {
+      rect->x = x1;
+      rect->y = y1;
+      rect->width = x2 - x1;
+      rect->height = y2 - y1;
+    }
+
+  if (x2 < 0 || y2 < 0 || x1 > size.width ||
+      y1 > size.height || visible.width <= 0 || visible.height <= 0)
+    return FALSE;
+
+  return TRUE;
+}
+
+void
+mech_area_set_matrix (MechArea             *area,
+                      const cairo_matrix_t *matrix)
+{
+  MechAreaPrivate *priv;
+
+  g_return_if_fail (MECH_IS_AREA (area));
+  g_return_if_fail (matrix != NULL);
+
+  priv = mech_area_get_instance_private (area);
+
+  if (MATRIX_IS_EQUAL (*matrix, priv->matrix))
+    return;
+
+  priv->matrix = *matrix;
+  priv->is_identity =
+    (MATRIX_IS_IDENTITY (priv->matrix) == TRUE);
+}
+
+gboolean
+mech_area_get_matrix (MechArea       *area,
+                      cairo_matrix_t *matrix)
+{
+  MechAreaPrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_AREA (area), FALSE);
+
+  priv = mech_area_get_instance_private (area);
+
+  if (matrix)
+    *matrix = priv->matrix;
+
+  return !priv->is_identity;
+}
+
+static MechArea *
+find_common_root (MechArea *area1,
+                  MechArea *area2)
+{
+  GNode *node1, *node2;
+  gint depth1, depth2;
+
+  node1 = _mech_area_get_node (area1);
+  node2 = _mech_area_get_node (area2);
+  depth1 = g_node_depth (node1);
+  depth2 = g_node_depth (node2);
+
+  if (depth1 == depth2)
+    {
+      while (node1 != node2)
+        {
+          node1 = node1->parent;
+          node2 = node2->parent;
+        }
+
+      return (node1) ? node1->data : NULL;
+    }
+
+  if (depth1 > depth2)
+    {
+      GNode *tmp;
+
+      /* Swap nodes */
+      tmp = node2;
+      node2 = node1;
+      node1 = tmp;
+    }
+
+  while (node1 && !g_node_is_ancestor (node1, node2))
+    node1 = node1->parent;
+
+  return (node1) ? node1->data : NULL;
+}
+
+static void
+_mech_area_get_matrix_linear_upwards (MechArea       *area,
+                                      MechArea       *ancestor,
+                                      cairo_matrix_t *matrix_ret)
+{
+  cairo_rectangle_t parent_rect, rect;
+  MechArea *cur, *parent;
+  cairo_matrix_t diff;
+  gboolean has_matrix;
+
+  cur = area;
+  _mech_area_get_stage_rect (cur, &rect);
+  cairo_matrix_init_identity (matrix_ret);
+
+  while (cur != ancestor)
+    {
+      parent = _mech_area_get_node (cur)->parent->data;
+      has_matrix = mech_area_get_matrix (cur, &diff);
+
+      if (parent != ancestor && !has_matrix)
+        {
+          cur = parent;
+          continue;
+        }
+      else if (has_matrix)
+        _mech_area_get_stage_rect (cur, &parent_rect);
+      else
+        _mech_area_get_stage_rect (parent, &parent_rect);
+
+      cairo_matrix_translate (&diff,
+                              rect.x - parent_rect.x,
+                              rect.y - parent_rect.y);
+      cairo_matrix_multiply (matrix_ret, matrix_ret, &diff);
+      rect = parent_rect;
+      cur = parent;
+    }
+}
+
+gboolean
+mech_area_get_relative_matrix (MechArea       *area,
+                               MechArea       *relative_to,
+                               cairo_matrix_t *matrix_ret)
+{
+  MechArea *common_root;
+  GNode *node;
+
+  g_return_val_if_fail (MECH_IS_AREA (area), FALSE);
+  g_return_val_if_fail (!relative_to || MECH_IS_AREA (relative_to), FALSE);
+  g_return_val_if_fail (matrix_ret != NULL, FALSE);
+
+  cairo_matrix_init_identity (matrix_ret);
+
+  if (area == relative_to)
+    return TRUE;
+
+  node = _mech_area_get_node (area);
+
+  if (!relative_to)
+    relative_to = common_root = g_node_get_root (node)->data;
+  else
+    common_root = find_common_root (area, relative_to);
+
+  g_return_val_if_fail (common_root != NULL, FALSE);
+
+  _mech_area_get_matrix_linear_upwards (area, common_root, matrix_ret);
+
+  if (common_root != relative_to)
+    {
+      cairo_matrix_t downwards;
+
+      _mech_area_get_matrix_linear_upwards (relative_to, common_root, &downwards);
+      cairo_matrix_invert (&downwards);
+      cairo_matrix_multiply (matrix_ret, matrix_ret, &downwards);
+    }
+
+  return TRUE;
+}
+
+void
+mech_area_transform_points (MechArea  *area,
+                            MechArea  *relative_to,
+                            MechPoint *points,
+                            gint       n_points)
+{
+  cairo_matrix_t matrix;
+  gint i;
+
+  g_return_if_fail (MECH_IS_AREA (area));
+  g_return_if_fail (!relative_to || MECH_IS_AREA (relative_to));
+
+  mech_area_get_relative_matrix (area, relative_to, &matrix);
+
+  for (i = 0; i < n_points; i++)
+    cairo_matrix_transform_point (&matrix, &points[i].x, &points[i].y);
+}
+
+void
+mech_area_transform_point (MechArea *area,
+                           MechArea *relative_to,
+                           gdouble  *x,
+                           gdouble  *y)
+{
+  MechPoint point;
+
+  g_return_if_fail (MECH_IS_AREA (area));
+  g_return_if_fail (!relative_to || MECH_IS_AREA (relative_to));
+  g_return_if_fail (x && y);
+
+  point.x = *x;
+  point.y = *y;
+
+  mech_area_transform_points (area, relative_to, &point, 1);
+  *x = point.x;
+  *y = point.y;
+}
+
+void
+mech_area_transform_corners (MechArea  *area,
+                             MechArea  *relative_to,
+                             MechPoint *top_left,
+                             MechPoint *top_right,
+                             MechPoint *bottom_left,
+                             MechPoint *bottom_right)
+{
+  cairo_rectangle_t rect;
+  MechPoint points[4];
+
+  g_return_if_fail (MECH_IS_AREA (area));
+  g_return_if_fail (!relative_to || MECH_IS_AREA (relative_to));
+
+  _mech_area_get_stage_rect (area, &rect);
+  points[0].x = points[0].y = points[1].y = points[2].x = 0;
+  points[1].x = points[3].x = rect.width;
+  points[2].y = points[3].y = rect.height;
+
+  mech_area_transform_points (area, relative_to, points, 4);
+
+  if (top_left)
+    *top_left = points[0];
+
+  if (top_right)
+    *top_right = points[1];
+
+  if (bottom_left)
+    *bottom_left = points[2];
+
+  if (bottom_right)
+    *bottom_right = points[3];
+}
+
 static gboolean
 _area_node_visibility_change (GNode    *node,
                               gpointer  user_data)
@@ -730,7 +1049,6 @@ mech_area_set_visible (MechArea *area,
   if (parent_visible)
     {
       _mech_area_notify_visibility_change (area);
-      mech_area_redraw (area, NULL);
     }
 }
 
