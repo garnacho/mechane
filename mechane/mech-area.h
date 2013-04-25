@@ -65,6 +65,8 @@ struct _MechAreaClass
 
   gboolean         (* child_resize)       (MechArea  *area,
                                            MechArea  *child);
+
+  void             (* visibility_changed) (MechArea  *area);
 };
 
 GType            mech_area_get_type             (void) G_GNUC_CONST;
@@ -96,6 +98,10 @@ void             mech_area_allocate_size        (MechArea          *area,
 void             mech_area_get_allocated_size   (MechArea          *area,
 						 cairo_rectangle_t *size);
 
+void             mech_area_set_visible          (MechArea          *area,
+						 gboolean           visible);
+gboolean         mech_area_get_visible          (MechArea          *area);
+gboolean         mech_area_is_visible           (MechArea          *area);
 
 
 G_END_DECLS

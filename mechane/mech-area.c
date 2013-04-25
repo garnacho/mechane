@@ -25,6 +25,16 @@
 
 typedef struct _MechAreaPrivate MechAreaPrivate;
 
+enum {
+  PROP_0,
+  PROP_VISIBLE
+};
+
+enum {
+  VISIBILITY_CHANGED,
+  LAST_SIGNAL
+};
+
 struct _MechAreaPrivate
 {
   GNode *node;
@@ -37,11 +47,13 @@ struct _MechAreaPrivate
   gdouble width_requested;
   gdouble height_requested;
 
+  guint visible             : 1;
   guint need_width_request  : 1;
   guint need_height_request : 1;
   guint need_allocate_size  : 1;
 };
 
+static guint signals[LAST_SIGNAL] = { 0 };
 static GQuark quark_window = 0;
 
 G_DEFINE_TYPE_WITH_PRIVATE (MechArea, mech_area, G_TYPE_INITIALLY_UNOWNED)
@@ -55,11 +67,51 @@ mech_area_init (MechArea *area)
 
   /* Allocate stage node, even if the area isn't attached to none yet */
   priv->node = _mech_stage_node_new (area);
+  mech_area_set_visible (area, TRUE);
 
   priv->rect.x = priv->rect.y = 0;
   priv->rect.width = priv->rect.height = 0;
   priv->need_width_request = priv->need_height_request = TRUE;
   priv->need_allocate_size = TRUE;
+}
+
+static void
+mech_area_set_property (GObject      *object,
+                        guint         param_id,
+                        const GValue *value,
+                        GParamSpec   *pspec)
+{
+  MechArea *area = (MechArea *) object;
+
+  switch (param_id)
+    {
+    case PROP_VISIBLE:
+      mech_area_set_visible (area, g_value_get_boolean (value));
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, param_id, pspec);
+    }
+}
+
+static void
+mech_area_get_property (GObject    *object,
+                        guint       param_id,
+                        GValue     *value,
+                        GParamSpec *pspec)
+{
+  MechArea *area = (MechArea *) object;
+  MechAreaPrivate *priv;
+
+  priv = mech_area_get_instance_private (area);
+
+  switch (param_id)
+    {
+    case PROP_VISIBLE:
+      g_value_set_boolean (value, priv->visible);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, param_id, pspec);
+    }
 }
 
 static void
@@ -180,6 +232,8 @@ mech_area_class_init (MechAreaClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
+  object_class->set_property = mech_area_set_property;
+  object_class->get_property = mech_area_get_property;
   object_class->finalize = mech_area_finalize;
   object_class->dispose = mech_area_dispose;
 
@@ -188,6 +242,23 @@ mech_area_class_init (MechAreaClass *klass)
   klass->allocate_size = mech_area_allocate_size_impl;
   klass->add = mech_area_add_impl;
   klass->remove = mech_area_remove_impl;
+
+  g_object_class_install_property (object_class,
+                                   PROP_VISIBLE,
+                                   g_param_spec_boolean ("visible",
+                                                         "Visible",
+                                                         "Whether the area is visible",
+                                                         TRUE,
+                                                         G_PARAM_READWRITE |
+                                                         G_PARAM_STATIC_STRINGS));
+  signals[VISIBILITY_CHANGED] =
+    g_signal_new ("visibility-changed",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST,
+                  G_STRUCT_OFFSET (MechAreaClass, visibility_changed),
+                  NULL, NULL,
+                  g_cclosure_marshal_VOID__VOID,
+                  G_TYPE_NONE, 0);
 
   quark_window = g_quark_from_static_string ("MECH_QUARK_WINDOW");
 }
@@ -294,8 +365,8 @@ _mech_area_allocate_stage_rect (MechArea          *area,
       priv->rect = *alloc;
 
       MECH_AREA_GET_CLASS (area)->allocate_size (area,
-						 alloc->width,
-						 alloc->height);
+                                                 alloc->width,
+                                                 alloc->height);
     }
   else if (priv->rect.x != alloc->x ||
            priv->rect.y != alloc->y)
@@ -547,6 +618,29 @@ mech_area_remove (MechArea *area,
     }
 }
 
+static gboolean
+_area_node_visibility_change (GNode    *node,
+                              gpointer  user_data)
+{
+  MechArea *area = node->data;
+
+  g_signal_emit (area, signals[VISIBILITY_CHANGED], 0);
+
+  return FALSE;
+}
+
+static void
+_mech_area_notify_visibility_change (MechArea *area)
+{
+  MechAreaPrivate *priv;
+
+  priv = mech_area_get_instance_private (area);
+  g_node_traverse (priv->node,
+                   G_PRE_ORDER, G_TRAVERSE_ALL,
+                   -1, _area_node_visibility_change,
+                   NULL);
+}
+
 void
 mech_area_set_parent (MechArea *area,
                       MechArea *parent)
@@ -582,7 +676,78 @@ mech_area_set_parent (MechArea *area,
       priv->need_allocate_size = TRUE;
     }
 
+  _mech_area_notify_visibility_change (area);
+
   g_object_unref (area);
+}
+
+void
+mech_area_set_visible (MechArea *area,
+                       gboolean  visible)
+{
+  MechAreaPrivate *priv;
+  gboolean parent_visible;
+
+  g_return_if_fail (MECH_IS_AREA (area));
+
+  priv = mech_area_get_instance_private (area);
+
+  if (priv->visible == visible)
+    return;
+
+  if (priv->node->parent)
+    parent_visible = mech_area_is_visible (priv->node->parent->data);
+  else
+    {
+      MechWindow *window;
+
+      window = mech_area_get_window (area);
+      parent_visible = window && mech_window_get_visible (window);
+    }
+
+  priv->visible = visible;
+  g_object_notify ((GObject *) area, "visible");
+
+  if (parent_visible)
+    {
+      _mech_area_notify_visibility_change (area);
+    }
+}
+
+gboolean
+mech_area_get_visible (MechArea *area)
+{
+  MechAreaPrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_AREA (area), FALSE);
+
+  priv = mech_area_get_instance_private (area);
+  return priv->visible;
+}
+
+gboolean
+mech_area_is_visible (MechArea *area)
+{
+  MechWindow *window = NULL;
+  GNode *node;
+
+  node = _mech_area_get_node (area);
+
+  while (node)
+    {
+      if (!mech_area_get_visible (node->data))
+        return FALSE;
+
+      if (!node->parent)
+        window = mech_area_get_window (node->data);
+
+      node = node->parent;
+    }
+
+  if (!window)
+    return FALSE;
+
+  return mech_window_get_visible (window);
 }
 
 GNode *

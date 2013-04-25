@@ -164,7 +164,9 @@ _mech_stage_traverse (MechStage            *stage,
       test_nodes = g_list_remove (test_nodes, cur);
       _mech_stage_pop_stack (stage, context, &stack, cur);
 
-      if (context->enter)
+      if (!mech_area_get_visible (cur->data))
+        enter = FALSE;
+      else if (context->enter)
         {
           enter = context->enter (stage, cur, context);
           stack = g_list_prepend (stack, cur);
