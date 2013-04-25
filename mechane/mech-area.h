@@ -103,6 +103,9 @@ void             mech_area_set_visible          (MechArea          *area,
 gboolean         mech_area_get_visible          (MechArea          *area);
 gboolean         mech_area_is_visible           (MechArea          *area);
 
+gint             mech_area_get_depth            (MechArea          *area);
+void             mech_area_set_depth            (MechArea          *area,
+                                                 gint               depth);
 
 G_END_DECLS
 

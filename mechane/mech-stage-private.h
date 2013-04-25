@@ -60,6 +60,8 @@ gboolean    _mech_stage_add                 (GNode           *parent_node,
                                              GNode           *child_node);
 gboolean    _mech_stage_remove              (GNode           *child_node);
 
+void        _mech_stage_notify_depth_change (MechStage       *stage,
+                                             MechArea        *area);
 
 G_END_DECLS
 

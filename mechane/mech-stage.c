@@ -27,6 +27,7 @@
 #define MAX4(a,b,c,d) MAX (MAX ((a), (b)), MAX ((c), (d)))
 
 typedef struct _MechStagePrivate MechStagePrivate;
+typedef struct _ZCacheNode ZCacheNode;
 typedef struct _StageNode StageNode;
 typedef struct _TraverseStageContext TraverseStageContext;
 
@@ -46,17 +47,25 @@ typedef void          (* LeaveNodeFunc) (MechStage            *stage,
                                          GNode                *parent,
                                          TraverseStageContext *context);
 
-struct _TraverseStageContext
+struct _ZCacheNode
 {
-  EnterNodeFunc enter;
-  LeaveNodeFunc leave;
-  VisitNodeFunc visit;
+  GNode *first_child;
+  GNode *last_child;
+  gint depth;
 };
 
 struct _StageNode
 {
   GNode node; /* data is MechArea */
   StageNode *last_child;
+  GArray *z_cache;
+};
+
+struct _TraverseStageContext
+{
+  EnterNodeFunc enter;
+  LeaveNodeFunc leave;
+  VisitNodeFunc visit;
 };
 
 struct _MechStagePrivate
@@ -206,12 +215,51 @@ _mech_stage_traverse (MechStage            *stage,
   _mech_stage_pop_stack (stage, context, &stack, NULL);
 }
 
+static GNode*
+_mech_stage_get_insertion_node (StageNode *parent,
+                                StageNode *child_node)
+{
+  ZCacheNode new, *cache, *prev = NULL;
+  gint depth;
+  guint i;
+
+  depth = mech_area_get_depth (child_node->node.data);
+
+  for (i = 0; i < parent->z_cache->len; i++)
+    {
+      cache = &g_array_index (parent->z_cache, ZCacheNode, i);
+
+      if (cache->depth == depth)
+        {
+          GNode *prev_last = cache->last_child;
+
+          cache->last_child = (GNode *) child_node;
+          return prev_last;
+        }
+      else if (cache->depth > depth)
+        break;
+
+      prev = cache;
+    }
+
+  new.depth = depth;
+  new.first_child = new.last_child = (GNode *) child_node;
+
+  if (i < parent->z_cache->len)
+    g_array_insert_val (parent->z_cache, i, new);
+  else
+    g_array_append_val (parent->z_cache, new);
+
+  return (prev) ? prev->last_child : NULL;
+}
+
 GNode *
 _mech_stage_node_new (MechArea *area)
 {
   StageNode *node;
 
   node = g_slice_new0 (StageNode);
+  node->z_cache = g_array_new (FALSE, TRUE, sizeof (ZCacheNode));
   node->node.data = area;
 
   return (GNode *) node;
@@ -222,6 +270,7 @@ _mech_stage_node_free (GNode *node)
 {
   StageNode *stage_node = (StageNode *) node;
 
+  g_array_free (stage_node->z_cache, TRUE);
   g_slice_free (StageNode, stage_node);
 }
 
@@ -229,6 +278,8 @@ gboolean
 _mech_stage_add (GNode *parent_node,
                  GNode *child_node)
 {
+  GNode *sibling;
+
   if (!parent_node || !child_node)
     return FALSE;
 
@@ -241,8 +292,10 @@ _mech_stage_add (GNode *parent_node,
     }
 
   g_object_ref_sink (child_node->data);
+  sibling = _mech_stage_get_insertion_node ((StageNode *) parent_node,
+                                            (StageNode *) child_node);
   _stage_node_insert ((StageNode *) parent_node,
-		      ((StageNode *) parent_node)->last_child,
+                      (StageNode *) sibling,
                       (StageNode *) child_node);
   return TRUE;
 }
@@ -250,8 +303,25 @@ _mech_stage_add (GNode *parent_node,
 gboolean
 _mech_stage_remove (GNode *child_node)
 {
+  ZCacheNode *cache;
+  StageNode *parent;
+  gint i, depth;
+
   if (!child_node->parent)
     return FALSE;
+
+  parent = (StageNode *) child_node->parent;
+  depth = mech_area_get_depth (child_node->data);
+
+  for (i = 0; i < parent->z_cache->len; i++)
+    {
+      cache = &g_array_index (parent->z_cache, ZCacheNode, i);
+
+      if (cache->depth == depth && cache->last_child == child_node)
+        g_array_remove_index (parent->z_cache, i);
+      else if (cache->depth > depth)
+        break;
+    }
 
   g_node_unlink (child_node);
   g_object_unref (child_node->data);
@@ -309,4 +379,24 @@ _mech_stage_set_root (MechStage *stage,
 
   g_assert (!priv->areas);
   priv->areas = (StageNode *) _mech_area_get_node (area);
+}
+
+void
+_mech_stage_notify_depth_change (MechStage *stage,
+                                 MechArea  *area)
+{
+  GNode *node, *parent, *sibling;
+
+  node = _mech_area_get_node (area);
+  parent = node->parent;
+
+  if (!parent)
+    return;
+
+  g_node_unlink (node);
+  sibling = _mech_stage_get_insertion_node ((StageNode *) parent,
+                                            (StageNode *) node);
+  _stage_node_insert ((StageNode *) parent,
+                      (StageNode *) sibling,
+                      (StageNode *) node);
 }

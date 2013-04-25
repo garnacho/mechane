@@ -24,10 +24,13 @@
 #include <mechane/mech-area-private.h>
 
 typedef struct _MechAreaPrivate MechAreaPrivate;
+typedef struct _MechAreaDelegateData MechAreaDelegateData;
+typedef struct _PreferredAxisSize PreferredAxisSize;
 
 enum {
   PROP_0,
-  PROP_VISIBLE
+  PROP_VISIBLE,
+  PROP_DEPTH
 };
 
 enum {
@@ -46,6 +49,8 @@ struct _MechAreaPrivate
 
   gdouble width_requested;
   gdouble height_requested;
+
+  gint depth;
 
   guint visible             : 1;
   guint need_width_request  : 1;
@@ -88,6 +93,9 @@ mech_area_set_property (GObject      *object,
     case PROP_VISIBLE:
       mech_area_set_visible (area, g_value_get_boolean (value));
       break;
+    case PROP_DEPTH:
+      mech_area_set_depth (area, g_value_get_int (value));
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, param_id, pspec);
     }
@@ -108,6 +116,9 @@ mech_area_get_property (GObject    *object,
     {
     case PROP_VISIBLE:
       g_value_set_boolean (value, priv->visible);
+      break;
+    case PROP_DEPTH:
+      g_value_set_int (value, priv->depth);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, param_id, pspec);
@@ -251,6 +262,14 @@ mech_area_class_init (MechAreaClass *klass)
                                                          TRUE,
                                                          G_PARAM_READWRITE |
                                                          G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (object_class,
+                                   PROP_DEPTH,
+                                   g_param_spec_int ("depth",
+                                                     "Depth",
+                                                     "Position in the Z-index",
+                                                     G_MININT, G_MAXINT, 0,
+                                                     G_PARAM_READWRITE |
+                                                     G_PARAM_STATIC_STRINGS));
   signals[VISIBILITY_CHANGED] =
     g_signal_new ("visibility-changed",
                   G_TYPE_FROM_CLASS (klass),
@@ -711,6 +730,7 @@ mech_area_set_visible (MechArea *area,
   if (parent_visible)
     {
       _mech_area_notify_visibility_change (area);
+      mech_area_redraw (area, NULL);
     }
 }
 
@@ -757,4 +777,38 @@ _mech_area_get_node (MechArea *area)
 
   priv = mech_area_get_instance_private (area);
   return priv->node;
+}
+
+gint
+mech_area_get_depth (MechArea *area)
+{
+  MechAreaPrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_AREA (area), 0);
+
+  priv = mech_area_get_instance_private (area);
+  return priv->depth;
+}
+
+void
+mech_area_set_depth (MechArea *area,
+                     gint      depth)
+{
+  MechAreaPrivate *priv;
+  MechStage *stage;
+
+  g_return_if_fail (MECH_IS_AREA (area));
+
+  priv = mech_area_get_instance_private (area);
+
+  if (priv->depth != depth)
+    {
+      priv->depth = depth;
+      g_object_notify ((GObject *) area, "depth");
+    }
+
+  stage = _mech_area_get_stage (area);
+
+  if (stage)
+    _mech_stage_notify_depth_change (stage, area);
 }
