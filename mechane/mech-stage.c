@@ -282,11 +282,19 @@ _mech_stage_set_size (MechStage *stage,
                       gint      *height)
 {
   MechStagePrivate *priv;
+  cairo_rectangle_t rect;
 
   priv = mech_stage_get_instance_private (stage);
+  rect.x = rect.y = 0;
+  rect.width = *width;
+  rect.height = *height;
+  mech_area_allocate_size (priv->areas->node.data, &rect);
 
-  priv->width = MAX (1, *width);
-  priv->height = MAX (1, *height);
+  priv->width = MAX (1, rect.width);
+  priv->height = MAX (1, rect.height);
+
+  *width = priv->width;
+  *height = priv->height;
 
   return TRUE;
 }

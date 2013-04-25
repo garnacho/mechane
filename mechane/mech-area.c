@@ -31,11 +31,15 @@ struct _MechAreaPrivate
   MechArea *parent;
   GPtrArray *children;
 
+  /* In stage coordinates */
+  cairo_rectangle_t rect;
+
   gdouble width_requested;
   gdouble height_requested;
 
   guint need_width_request  : 1;
   guint need_height_request : 1;
+  guint need_allocate_size  : 1;
 };
 
 static GQuark quark_window = 0;
@@ -51,7 +55,11 @@ mech_area_init (MechArea *area)
 
   /* Allocate stage node, even if the area isn't attached to none yet */
   priv->node = _mech_stage_node_new (area);
+
+  priv->rect.x = priv->rect.y = 0;
+  priv->rect.width = priv->rect.height = 0;
   priv->need_width_request = priv->need_height_request = TRUE;
+  priv->need_allocate_size = TRUE;
 }
 
 static void
@@ -94,6 +102,17 @@ mech_area_get_extent_impl (MechArea *area,
                            MechAxis  axis)
 {
   gdouble ret = 0;
+  GNode *children;
+
+  children = _mech_area_get_node (area)->children;
+
+  for (; children; children = children->next)
+    {
+      gdouble child_size;
+
+      child_size = mech_area_get_extent (children->data, axis);
+      ret = MAX (ret, child_size);
+    }
 
   return ret;
 }
@@ -103,9 +122,38 @@ mech_area_get_second_extent_impl (MechArea *area,
                                   MechAxis  axis,
                                   gdouble   other_value)
 {
+  GNode *children;
   gdouble ret = 0;
 
+  children = _mech_area_get_node (area)->children;
+
+  for (; children; children = children->next)
+    {
+      gdouble child_size;
+
+      child_size = mech_area_get_second_extent (children->data,
+                                                axis, other_value);
+      ret = MAX (ret, child_size);
+    }
+
   return ret;
+}
+
+static void
+mech_area_allocate_size_impl (MechArea *area,
+                              gdouble   width,
+                              gdouble   height)
+{
+  cairo_rectangle_t rect;
+  GNode *children;
+
+  rect.x = rect.y = 0;
+  rect.width = width;
+  rect.height = height;
+  children = _mech_area_get_node (area)->children;
+
+  for (; children; children = children->next)
+    mech_area_allocate_size (children->data, &rect);
 }
 
 static void
@@ -137,6 +185,7 @@ mech_area_class_init (MechAreaClass *klass)
 
   klass->get_extent = mech_area_get_extent_impl;
   klass->get_second_extent = mech_area_get_second_extent_impl;
+  klass->allocate_size = mech_area_allocate_size_impl;
   klass->add = mech_area_add_impl;
   klass->remove = mech_area_remove_impl;
 
@@ -214,6 +263,133 @@ mech_area_get_second_extent (MechArea *area,
     }
 
   return (axis == MECH_AXIS_X) ? priv->width_requested : priv->height_requested;
+}
+
+static gboolean
+_area_update_translation (GNode    *node,
+                          gpointer  user_data)
+{
+  MechPoint *diff = user_data;
+  MechArea *area = node->data;
+  MechAreaPrivate *priv;
+
+  priv = mech_area_get_instance_private (area);
+  priv->rect.x += diff->x;
+  priv->rect.y += diff->y;
+
+  return FALSE;
+}
+
+static void
+_mech_area_allocate_stage_rect (MechArea          *area,
+                                cairo_rectangle_t *alloc)
+{
+  MechAreaPrivate *priv = mech_area_get_instance_private (area);
+
+  if (priv->need_allocate_size ||
+      priv->rect.width != alloc->width ||
+      priv->rect.height != alloc->height)
+    {
+      priv->need_allocate_size = FALSE;
+      priv->rect = *alloc;
+
+      MECH_AREA_GET_CLASS (area)->allocate_size (area,
+						 alloc->width,
+						 alloc->height);
+    }
+  else if (priv->rect.x != alloc->x ||
+           priv->rect.y != alloc->y)
+    {
+      MechPoint diff;
+
+      diff.x = alloc->x - priv->rect.x;
+      diff.y = alloc->y - priv->rect.y;
+      g_node_traverse (priv->node,
+                       G_PRE_ORDER, G_TRAVERSE_ALL,
+                       -1, _area_update_translation,
+                       &diff);
+    }
+}
+
+void
+_mech_area_get_stage_rect (MechArea          *area,
+                           cairo_rectangle_t *rect)
+{
+  MechAreaPrivate *priv;
+
+  priv = mech_area_get_instance_private (area);
+  *rect = priv->rect;
+}
+
+static void
+_mech_area_parent_to_stage (MechArea *area,
+                            gdouble  *x,
+                            gdouble  *y)
+{
+  cairo_rectangle_t rect;
+  GNode *parent;
+
+  parent = _mech_area_get_node (area)->parent;
+
+  if (!parent)
+    return;
+
+  _mech_area_get_stage_rect (parent->data, &rect);
+  *x += rect.x;
+  *y += rect.y;
+}
+
+static void
+_mech_area_stage_to_parent (MechArea *area,
+                            gdouble  *x,
+                            gdouble  *y)
+{
+  cairo_rectangle_t rect;
+  GNode *parent;
+
+  parent = _mech_area_get_node (area)->parent;
+
+  if (!parent)
+    return;
+
+  _mech_area_get_stage_rect (parent->data, &rect);
+  *x -= rect.x;
+  *y -= rect.y;
+}
+
+void
+mech_area_allocate_size (MechArea          *area,
+                         cairo_rectangle_t *rect)
+{
+  cairo_rectangle_t alloc = { 0 };
+  MechStage *stage;
+
+  g_return_if_fail (MECH_IS_AREA (area));
+  g_return_if_fail (rect != NULL);
+
+  stage = _mech_area_get_stage (area);
+
+  if (!stage)
+    return;
+
+  alloc = *rect;
+  _mech_area_parent_to_stage (area, &alloc.x, &alloc.y);
+  _mech_area_allocate_stage_rect (area, &alloc);
+}
+
+void
+mech_area_get_allocated_size (MechArea          *area,
+                              cairo_rectangle_t *size)
+{
+  MechAreaPrivate *priv;
+
+  g_return_if_fail (MECH_IS_AREA (area));
+  g_return_if_fail (size != NULL);
+
+  priv = mech_area_get_instance_private (area);
+
+  *size = priv->rect;
+  _mech_area_stage_to_parent (area, &size->x, &size->y);
 }
 
 void
@@ -400,7 +576,10 @@ mech_area_set_parent (MechArea *area,
     }
   else
     {
+      priv->rect.x = priv->rect.y = 0;
+      priv->rect.width = priv->rect.height = 0;
       priv->need_width_request = priv->need_height_request = TRUE;
+      priv->need_allocate_size = TRUE;
     }
 
   g_object_unref (area);

@@ -24,6 +24,7 @@ typedef struct _MechArea MechArea;
 #include <glib-object.h>
 #include <mechane/mech-enums.h>
 #include <mechane/mech-window.h>
+#include <mechane/mech-types.h>
 
 G_BEGIN_DECLS
 
@@ -75,7 +76,6 @@ void             mech_area_remove               (MechArea       *area,
 gint             mech_area_get_children         (MechArea       *area,
 						 MechArea     ***children);
 
-MechArea       * mech_area_get_parent           (MechArea       *area);
 gboolean         mech_area_is_ancestor          (MechArea       *area,
 						 MechArea       *ancestor);
 
@@ -85,10 +85,17 @@ gdouble          mech_area_get_second_extent    (MechArea       *area,
 						 MechAxis        axis,
 						 gdouble         other_value);
 
+MechArea       * mech_area_get_parent           (MechArea       *area);
 void             mech_area_set_parent           (MechArea       *area,
 						 MechArea       *parent);
 
 MechWindow     * mech_area_get_window           (MechArea       *area);
+
+void             mech_area_allocate_size        (MechArea          *area,
+						 cairo_rectangle_t *size);
+void             mech_area_get_allocated_size   (MechArea          *area,
+						 cairo_rectangle_t *size);
+
 
 
 G_END_DECLS
