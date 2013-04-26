@@ -22,6 +22,7 @@
 #include <mechane/mech-stage-private.h>
 #include <mechane/mech-window-private.h>
 #include <mechane/mech-area-private.h>
+#include <mechane/mech-enum-types.h>
 
 #define MATRIX_IS_EQUAL(a,b) \
   ((a).xx == (b).xx &&       \
@@ -40,12 +41,14 @@ typedef struct _MechAreaPrivate MechAreaPrivate;
 
 enum {
   PROP_0,
+  PROP_EVENTS,
   PROP_VISIBLE,
   PROP_DEPTH,
   PROP_MATRIX
 };
 
 enum {
+  HANDLE_EVENT,
   VISIBILITY_CHANGED,
   LAST_SIGNAL
 };
@@ -65,6 +68,7 @@ struct _MechAreaPrivate
 
   gint depth;
 
+  guint evmask              : 16;
   guint is_identity         : 1;
   guint visible             : 1;
   guint need_width_request  : 1;
@@ -106,6 +110,9 @@ mech_area_set_property (GObject      *object,
 
   switch (param_id)
     {
+    case PROP_EVENTS:
+      mech_area_set_events (area, g_value_get_flags (value));
+      break;
     case PROP_VISIBLE:
       mech_area_set_visible (area, g_value_get_boolean (value));
       break;
@@ -133,6 +140,9 @@ mech_area_get_property (GObject    *object,
 
   switch (param_id)
     {
+    case PROP_EVENTS:
+      g_value_set_flags (value, priv->evmask);
+      break;
     case PROP_VISIBLE:
       g_value_set_boolean (value, priv->visible);
       break;
@@ -277,6 +287,14 @@ mech_area_class_init (MechAreaClass *klass)
   klass->remove = mech_area_remove_impl;
 
   g_object_class_install_property (object_class,
+                                   PROP_EVENTS,
+                                   g_param_spec_flags ("events",
+                                                       "Events",
+                                                       "Events handled by the area",
+                                                       MECH_TYPE_EVENT_MASK, MECH_NONE,
+                                                       G_PARAM_READWRITE |
+                                                       G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (object_class,
                                    PROP_VISIBLE,
                                    g_param_spec_boolean ("visible",
                                                          "Visible",
@@ -300,6 +318,15 @@ mech_area_class_init (MechAreaClass *klass)
                                                        CAIRO_GOBJECT_TYPE_MATRIX,
                                                        G_PARAM_READWRITE |
                                                        G_PARAM_STATIC_STRINGS));
+  signals[HANDLE_EVENT] =
+    g_signal_new ("handle-event",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST,
+                  G_STRUCT_OFFSET (MechAreaClass, handle_event),
+                  g_signal_accumulator_true_handled, NULL,
+                  _mech_marshal_BOOLEAN__BOXED,
+                  G_TYPE_BOOLEAN, 1,
+                  MECH_TYPE_EVENT | G_SIGNAL_TYPE_STATIC_SCOPE);
   signals[VISIBILITY_CHANGED] =
     g_signal_new ("visibility-changed",
                   G_TYPE_FROM_CLASS (klass),
@@ -687,6 +714,81 @@ mech_area_remove (MechArea *area,
     }
 }
 
+void
+mech_area_set_events (MechArea      *area,
+                      MechEventMask  evmask)
+{
+  MechAreaPrivate *priv;
+
+  g_return_if_fail (MECH_IS_AREA (area));
+
+  /* FIXME: ensure consistent state after setting evmask
+   * * Crossing events
+   * * breaking grabs
+   */
+
+  priv = mech_area_get_instance_private (area);
+  priv->evmask = evmask;
+}
+
+void
+mech_area_add_events (MechArea      *area,
+                      MechEventMask  evmask)
+{
+  g_return_if_fail (MECH_IS_AREA (area));
+
+  evmask |= mech_area_get_events (area);
+  mech_area_set_events (area, evmask);
+}
+
+MechEventMask
+mech_area_get_events (MechArea *area)
+{
+  MechAreaPrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_AREA (area), MECH_NONE);
+
+  priv = mech_area_get_instance_private (area);
+  return priv->evmask;
+}
+
+gboolean
+mech_area_handles_event (MechArea      *area,
+                         MechEventType  event_type)
+{
+  MechEventMask evmask;
+
+  g_return_val_if_fail (MECH_IS_AREA (area), FALSE);
+
+  evmask = mech_area_get_events (area);
+
+  switch (event_type)
+    {
+    case MECH_KEY_PRESS:
+    case MECH_KEY_RELEASE:
+      return (evmask & MECH_KEY_MASK);
+    case MECH_FOCUS_IN:
+    case MECH_FOCUS_OUT:
+      return (evmask & MECH_FOCUS_MASK);
+    case MECH_MOTION:
+      return (evmask & MECH_MOTION_MASK);
+    case MECH_BUTTON_PRESS:
+    case MECH_BUTTON_RELEASE:
+      return (evmask & MECH_BUTTON_MASK);
+    case MECH_ENTER:
+    case MECH_LEAVE:
+      return (evmask & MECH_CROSSING_MASK);
+    case MECH_SCROLL:
+      return (evmask & MECH_SCROLL_MASK);
+    case MECH_TOUCH_DOWN:
+    case MECH_TOUCH_MOTION:
+    case MECH_TOUCH_UP:
+      return (evmask & MECH_TOUCH_MASK);
+    }
+
+  return FALSE;
+}
+
 gboolean
 _mech_area_get_visible_rect (MechArea          *area,
                              cairo_rectangle_t *rect)
@@ -954,6 +1056,20 @@ mech_area_transform_corners (MechArea  *area,
 
   if (bottom_right)
     *bottom_right = points[3];
+}
+
+gboolean
+_mech_area_handle_event (MechArea  *area,
+                         MechEvent *event)
+{
+  gboolean retval;
+
+  if (!mech_area_handles_event (area, event->type))
+    return FALSE;
+
+  g_signal_emit (area, signals[HANDLE_EVENT], 0, event, &retval);
+
+  return retval;
 }
 
 static gboolean

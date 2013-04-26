@@ -48,6 +48,8 @@ struct _MechAreaClass
 
   void             (* draw)               (MechArea  *area,
                                            cairo_t   *cr);
+  gboolean         (* handle_event)       (MechArea  *area,
+                                           MechEvent *event);
 
   void             (* add)                (MechArea  *area,
                                            MechArea  *child);
@@ -100,6 +102,15 @@ void             mech_area_set_parent           (MechArea       *area,
 						 MechArea       *parent);
 
 MechWindow     * mech_area_get_window           (MechArea       *area);
+
+void             mech_area_set_events           (MechArea        *area,
+                                                 MechEventMask    evmask);
+void             mech_area_add_events           (MechArea        *area,
+                                                 MechEventMask    evmask);
+
+MechEventMask    mech_area_get_events           (MechArea        *area);
+gboolean         mech_area_handles_event        (MechArea        *area,
+                                                 MechEventType    event_type);
 
 void             mech_area_allocate_size        (MechArea          *area,
 						 cairo_rectangle_t *size);

@@ -30,6 +30,8 @@ void             _mech_area_make_window_root      (MechArea          *area,
                                                    MechWindow        *window);
 gboolean         _mech_area_get_visible_rect      (MechArea          *area,
                                                    cairo_rectangle_t *rect);
+gboolean         _mech_area_handle_event          (MechArea          *area,
+                                                   MechEvent         *event);
 void             _mech_area_get_stage_rect        (MechArea          *area,
                                                    cairo_rectangle_t *rect);
 
