@@ -16,6 +16,7 @@
  */
 
 #include "mech-surface-wayland.h"
+#include "mech-surface-wayland-shm.h"
 #include "mech-backend-wayland.h"
 
 G_DEFINE_ABSTRACT_TYPE (MechSurfaceWayland, mech_surface_wayland,
@@ -99,6 +100,9 @@ MechSurface *
 _mech_surface_wayland_new (MechBackingSurfaceType  type,
                            struct wl_surface      *wl_surface)
 {
+  return g_object_new (MECH_BACKING_SURFACE_TYPE_SHM,
+                       "wl-surface", wl_surface,
+                       NULL);
 }
 
 gboolean
