@@ -7,6 +7,7 @@ BUILT_SOURCES = 		\
 mech_sources = 			\
 	$(BUILT_SOURCES)	\
 	mech-area.c		\
+	mech-backend.c		\
 	mech-events.c		\
 	mech-stage.c		\
 	mech-surface.c		\
