@@ -16,6 +16,7 @@
  */
 
 #include <mechane/mech-backend-private.h>
+#include <backends/wayland/mech-backend-wayland.h>
 
 G_DEFINE_ABSTRACT_TYPE (MechBackend, mech_backend, G_TYPE_OBJECT)
 
@@ -32,6 +33,8 @@ mech_backend_init (MechBackend *backend)
 MechBackend *
 mech_backend_get (void)
 {
+  /* FIXME: make this loadable */
+  return (MechBackend *) _mech_backend_wayland_get ();
 }
 
 MechWindow *

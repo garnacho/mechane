@@ -78,6 +78,8 @@ PKG_CHECK_MODULES(MECH_WAYLAND_DEPS, [
 
 AC_CONFIG_FILES([
 	Makefile
+        mechane/backends/Makefile
+        mechane/backends/wayland/Makefile
 	mechane/Makefile
 	po/Makefile.in
 ])
