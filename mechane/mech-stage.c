@@ -30,6 +30,7 @@ typedef struct _MechStagePrivate MechStagePrivate;
 typedef struct _ZCacheNode ZCacheNode;
 typedef struct _StageNode StageNode;
 typedef struct _TraverseStageContext TraverseStageContext;
+typedef struct _PickStageContext PickStageContext;
 
 typedef enum {
   TRAVERSE_FLAG_STOP     = 0,
@@ -68,6 +69,16 @@ struct _TraverseStageContext
   VisitNodeFunc visit;
 };
 
+struct _PickStageContext
+{
+  TraverseStageContext functions;
+  MechArea *root;
+  GPtrArray *areas;
+  MechEventType event_type;
+  gint x;
+  gint y;
+};
+
 struct _MechStagePrivate
 {
   StageNode *areas;
@@ -99,6 +110,66 @@ _stage_node_insert (StageNode *parent,
                                             (GNode *) node);
 }
 
+/* Picking */
+static TraverseFlags
+pick_stage_visit (MechStage        *stage,
+                  const GNode      *node,
+                  PickStageContext *context)
+{
+  cairo_region_t *region;
+  MechStagePrivate *priv;
+  MechArea *root, *area;
+  gboolean inside;
+  gdouble x, y;
+
+  priv = mech_stage_get_instance_private (stage);
+  area = node->data;
+  root = context->root;
+  x = context->x;
+  y = context->y;
+
+  if (!root)
+    root = priv->areas->node.data;
+
+  mech_area_transform_point (root, area, &x, &y);
+  region = mech_area_get_shape (area);
+  inside = cairo_region_contains_point (region, (int) x, (int) y);
+  cairo_region_destroy (region);
+
+  if (!inside)
+    return TRAVERSE_FLAG_CONTINUE;
+
+  if (context->event_type == 0 ||
+      mech_area_handles_event (area, context->event_type))
+    g_ptr_array_add (context->areas, g_object_ref (area));
+
+  return TRAVERSE_FLAG_CONTINUE | TRAVERSE_FLAG_RECURSE;
+}
+
+static void
+pick_stage_context_init (PickStageContext *context,
+                         MechArea         *root,
+                         MechEventType     event_type,
+                         gint              x,
+                         gint              y)
+{
+  context->functions.enter = NULL;
+  context->functions.leave = NULL;
+  context->functions.visit = (VisitNodeFunc) pick_stage_visit;
+  context->areas = g_ptr_array_new_with_free_func ((GDestroyNotify) g_object_unref);
+  context->root = root;
+  context->event_type = event_type;
+  context->x = x;
+  context->y = y;
+}
+
+static void
+pick_stage_context_finish (PickStageContext *context)
+{
+  g_ptr_array_unref (context->areas);
+}
+
+/* MechStage */
 static void
 mech_stage_class_init (MechStageClass *klass)
 {
@@ -369,6 +440,47 @@ _mech_stage_set_size (MechStage *stage,
   *height = priv->height;
 
   return TRUE;
+}
+
+GPtrArray *
+_mech_stage_pick_for_event (MechStage     *stage,
+                            MechArea      *area,
+                            MechEventType  event_type,
+                            gdouble        x,
+                            gdouble        y)
+{
+  PickStageContext context;
+  GNode *node = NULL;
+  GPtrArray *areas;
+
+  if (area)
+    {
+      if (stage != _mech_area_get_stage (area))
+        return NULL;
+
+      node = _mech_area_get_node (area);
+    }
+
+  pick_stage_context_init (&context, area, event_type, x, y);
+  _mech_stage_traverse (stage, &context.functions, node, FALSE);
+
+  if (context.areas && context.areas->len > 0)
+    areas = g_ptr_array_ref (context.areas);
+  else
+    areas = NULL;
+
+  pick_stage_context_finish (&context);
+
+  return areas;
+}
+
+GPtrArray *
+_mech_stage_pick (MechStage *stage,
+                  MechArea  *area,
+                  gdouble    x,
+                  gdouble    y)
+{
+  return _mech_stage_pick_for_event (stage, area, 0, x, y);
 }
 
 void
