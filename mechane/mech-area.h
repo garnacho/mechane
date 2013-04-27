@@ -103,6 +103,10 @@ void             mech_area_set_parent           (MechArea       *area,
 
 MechWindow     * mech_area_get_window           (MechArea       *area);
 
+void             mech_area_set_clip             (MechArea        *area,
+                                                 gboolean         clip);
+gboolean         mech_area_get_clip             (MechArea        *area);
+
 void             mech_area_set_events           (MechArea        *area,
                                                  MechEventMask    evmask);
 void             mech_area_add_events           (MechArea        *area,

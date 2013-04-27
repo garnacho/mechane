@@ -42,6 +42,7 @@ typedef struct _MechAreaPrivate MechAreaPrivate;
 enum {
   PROP_0,
   PROP_EVENTS,
+  PROP_CLIP,
   PROP_VISIBLE,
   PROP_DEPTH,
   PROP_MATRIX
@@ -69,6 +70,7 @@ struct _MechAreaPrivate
   gint depth;
 
   guint evmask              : 16;
+  guint clip                : 1;
   guint is_identity         : 1;
   guint visible             : 1;
   guint need_width_request  : 1;
@@ -113,6 +115,9 @@ mech_area_set_property (GObject      *object,
     case PROP_EVENTS:
       mech_area_set_events (area, g_value_get_flags (value));
       break;
+    case PROP_CLIP:
+      mech_area_set_clip (area, g_value_get_boolean (value));
+      break;
     case PROP_VISIBLE:
       mech_area_set_visible (area, g_value_get_boolean (value));
       break;
@@ -142,6 +147,9 @@ mech_area_get_property (GObject    *object,
     {
     case PROP_EVENTS:
       g_value_set_flags (value, priv->evmask);
+      break;
+    case PROP_CLIP:
+      g_value_set_boolean (value, priv->clip);
       break;
     case PROP_VISIBLE:
       g_value_set_boolean (value, priv->visible);
@@ -294,6 +302,14 @@ mech_area_class_init (MechAreaClass *klass)
                                                        MECH_TYPE_EVENT_MASK, MECH_NONE,
                                                        G_PARAM_READWRITE |
                                                        G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (object_class,
+                                   PROP_CLIP,
+                                   g_param_spec_boolean ("clip",
+                                                         "Clip",
+                                                         "Whether the area is clipped to its untrasformed rectangle area",
+                                                         FALSE,
+                                                         G_PARAM_READWRITE |
+                                                         G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (object_class,
                                    PROP_VISIBLE,
                                    g_param_spec_boolean ("visible",
@@ -808,7 +824,7 @@ _mech_area_get_visible_rect (MechArea          *area,
       return TRUE;
     }
 
-  while (node->parent)
+  while (node->parent && !mech_area_get_clip (node->data))
     node = node->parent;
 
   mech_area_transform_corners (node->data, area,
@@ -867,6 +883,36 @@ mech_area_get_matrix (MechArea       *area,
     *matrix = priv->matrix;
 
   return !priv->is_identity;
+}
+
+void
+mech_area_set_clip (MechArea *area,
+                    gboolean  clip)
+{
+  MechAreaPrivate *priv;
+
+  g_return_if_fail (MECH_IS_AREA (area));
+
+  priv = mech_area_get_instance_private (area);
+
+  if ((clip == TRUE) != (priv->clip == TRUE))
+    {
+      priv->clip = clip;
+      g_object_notify ((GObject *) area, "clip");
+
+      /* FIXME: needs redraw, may also affect pointer state */
+    }
+}
+
+gboolean
+mech_area_get_clip (MechArea *area)
+{
+  MechAreaPrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_AREA (area), FALSE);
+
+  priv = mech_area_get_instance_private (area);
+  return priv->clip;
 }
 
 static MechArea *
