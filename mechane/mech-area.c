@@ -54,6 +54,13 @@ enum {
   LAST_SIGNAL
 };
 
+struct _PreferredAxisSize
+{
+  gdouble value;
+  guint unit   : 3;
+  guint is_set : 1;
+};
+
 struct _MechAreaPrivate
 {
   GNode *node;
@@ -278,6 +285,18 @@ mech_area_remove_impl (MechArea *area,
     mech_area_set_parent (child, NULL);
 }
 
+static cairo_region_t *
+mech_area_get_shape_impl (MechArea *area)
+{
+  MechAreaPrivate *priv = mech_area_get_instance_private (area);
+  cairo_rectangle_int_t rect = { 0 };
+
+  rect.width = priv->rect.width;
+  rect.height = priv->rect.height;
+
+  return cairo_region_create_rectangle (&rect);
+}
+
 static void
 mech_area_class_init (MechAreaClass *klass)
 {
@@ -293,6 +312,7 @@ mech_area_class_init (MechAreaClass *klass)
   klass->allocate_size = mech_area_allocate_size_impl;
   klass->add = mech_area_add_impl;
   klass->remove = mech_area_remove_impl;
+  klass->get_shape = mech_area_get_shape_impl;
 
   g_object_class_install_property (object_class,
                                    PROP_EVENTS,
@@ -1291,4 +1311,12 @@ mech_area_set_depth (MechArea *area,
 
   if (stage)
     _mech_stage_notify_depth_change (stage, area);
+}
+
+cairo_region_t *
+mech_area_get_shape (MechArea *area)
+{
+  g_return_val_if_fail (MECH_IS_AREA (area), NULL);
+
+  return MECH_AREA_GET_CLASS (area)->get_shape (area);
 }

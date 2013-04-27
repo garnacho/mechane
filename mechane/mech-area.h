@@ -68,6 +68,8 @@ struct _MechAreaClass
   gboolean         (* child_resize)       (MechArea  *area,
                                            MechArea  *child);
 
+  cairo_region_t * (* get_shape)          (MechArea  *area);
+
   void             (* visibility_changed) (MechArea  *area);
 };
 
@@ -147,6 +149,8 @@ gboolean         mech_area_is_visible           (MechArea          *area);
 gint             mech_area_get_depth            (MechArea          *area);
 void             mech_area_set_depth            (MechArea          *area,
                                                  gint               depth);
+
+cairo_region_t  * mech_area_get_shape           (MechArea          *area);
 
 G_END_DECLS
 
