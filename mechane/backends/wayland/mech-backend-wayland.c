@@ -19,12 +19,19 @@
 #include <unistd.h>
 #include <string.h>
 #include "mech-backend-wayland.h"
+#include "mech-event-source-wayland.h"
 
 G_DEFINE_TYPE (MechBackendWayland, _mech_backend_wayland, MECH_TYPE_BACKEND)
+
+struct _MechBackendWaylandPriv
+{
+  MechEventSourceWayland *event_source;
+};
 
 static void
 _mech_backend_wayland_class_init (MechBackendWaylandClass *klass)
 {
+  g_type_class_add_private (klass, sizeof (MechBackendWaylandPriv));
 }
 
 static void
@@ -61,8 +68,13 @@ static const struct wl_registry_listener registry_listener_funcs = {
 static void
 _mech_backend_wayland_init (MechBackendWayland *backend)
 {
+  MechBackendWaylandPriv *priv;
   const gchar *display;
 
+  backend->_priv = priv =
+    G_TYPE_INSTANCE_GET_PRIVATE (backend,
+                                 MECH_TYPE_BACKEND_WAYLAND,
+                                 MechBackendWaylandPriv);
   display = g_getenv ("WAYLAND_DISPLAY");
 
   if (!display || !*display)
@@ -78,6 +90,8 @@ _mech_backend_wayland_init (MechBackendWayland *backend)
       g_critical ("Could not open display '%s'", display);
       _exit (EXIT_FAILURE);
     }
+
+  priv->event_source = _mech_event_source_wayland_new (backend);
 
   backend->wl_registry =
     wl_display_get_registry (backend->wl_display);
