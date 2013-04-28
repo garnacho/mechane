@@ -44,6 +44,7 @@ struct _MechSurfacePrivate
   /* area coordinates */
   cairo_rectangle_t cached_rect;
   cairo_rectangle_t viewport_rect;
+  GArray *damaged;
 
   /* Pixel sizes */
   gint width;
@@ -100,12 +101,26 @@ mech_surface_set_property (GObject      *object,
 }
 
 static void
+mech_surface_finalize (GObject *object)
+{
+  MechSurfacePrivate *priv;
+
+  priv = mech_surface_get_instance_private ((MechSurface *) object);
+
+  if (priv->damaged)
+    g_array_unref (priv->damaged);
+
+  G_OBJECT_CLASS (mech_surface_parent_class)->finalize (object);
+}
+
+static void
 mech_surface_class_init (MechSurfaceClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
   object_class->get_property = mech_surface_get_property;
   object_class->set_property = mech_surface_set_property;
+  object_class->finalize = mech_surface_finalize;
 
   g_object_class_install_property (object_class,
                                    PROP_AREA,
@@ -509,4 +524,75 @@ _mech_surface_new (MechArea *area)
   g_object_set (surface, "area", area, NULL);
 
   return surface;
+}
+
+void
+_mech_surface_damage (MechSurface       *surface,
+                      cairo_rectangle_t *rect)
+{
+  MechSurfacePrivate *priv;
+  cairo_rectangle_t damage;
+
+  priv = mech_surface_get_instance_private (surface);
+
+  if (rect)
+    damage = *rect;
+  else
+    damage = priv->cached_rect;
+
+  if (!priv->damaged)
+    priv->damaged = g_array_new (FALSE, FALSE, sizeof (cairo_rectangle_t));
+
+  g_array_append_val (priv->damaged, damage);
+}
+
+cairo_region_t *
+_mech_surface_apply_clip (MechSurface *surface,
+                          cairo_t     *cr)
+{
+  cairo_rectangle_int_t check;
+  MechSurfacePrivate *priv;
+  cairo_region_t *region;
+  gint i;
+
+  priv = mech_surface_get_instance_private (surface);
+  region = cairo_region_create ();
+
+  if (!priv->damaged || priv->damaged->len == 0)
+    return region;
+
+  for (i = 0; i < priv->damaged->len; i++)
+    {
+      cairo_rectangle_t *rect, pixels;
+
+      rect = &g_array_index (priv->damaged, cairo_rectangle_t, i);
+      cairo_user_to_device (cr, &rect->x, &rect->y);
+      cairo_user_to_device_distance (cr, &rect->width, &rect->height);
+
+      ALIGN_RECT (rect, &pixels);
+
+      cairo_device_to_user (cr, &pixels.x, &pixels.y);
+      cairo_device_to_user_distance (cr, &pixels.width, &pixels.height);
+
+      cairo_rectangle (cr, pixels.x, pixels.y, pixels.width, pixels.height);
+
+      ALIGN_RECT (&pixels, &check);
+      cairo_region_union_rectangle (region, &check);
+    }
+
+  cairo_clip (cr);
+
+  cairo_save (cr);
+  cairo_set_operator (cr, CAIRO_OPERATOR_SOURCE);
+  cairo_set_source_rgba (cr, 0, 0, 0, 0);
+  cairo_paint (cr);
+  cairo_restore (cr);
+
+  ALIGN_RECT (&priv->cached_rect, &check);
+  cairo_region_intersect_rectangle (region, &check);
+
+  g_array_unref (priv->damaged);
+  priv->damaged = NULL;
+
+  return region;
 }
