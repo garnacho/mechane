@@ -44,6 +44,9 @@ struct _MechWindowClass
 {
   GObjectClass parent_class;
 
+  gboolean (* handle_event)  (MechWindow        *window,
+                              MechEvent         *event);
+
   void     (* set_title)     (MechWindow        *window,
                               const gchar       *title);
   void     (* set_visible)   (MechWindow        *window,
@@ -55,6 +58,9 @@ struct _MechWindowClass
 };
 
 GType             mech_window_get_type      (void) G_GNUC_CONST;
+
+gboolean          mech_window_handle_event  (MechWindow      *window,
+                                             MechEvent       *event);
 
 void              mech_window_get_size      (MechWindow      *window,
                                              gint            *width,

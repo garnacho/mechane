@@ -26,12 +26,35 @@ enum {
 };
 
 typedef struct _MechWindowPrivate MechWindowPrivate;
+typedef struct _MechTouchInfo MechTouchInfo;
+typedef struct _MechPointerInfo MechPointerInfo;
+typedef struct _MechKeyboardInfo MechKeyboardInfo;
+
+struct _MechTouchInfo
+{
+  GPtrArray *event_areas;
+};
+
+struct _MechPointerInfo
+{
+  GPtrArray *crossing_areas;
+  GPtrArray *grab_areas;
+};
+
+struct _MechKeyboardInfo
+{
+  GPtrArray *focus_areas;
+};
 
 struct _MechWindowPrivate
 {
   MechStage *stage;
   MechMonitor *monitor;
   MechClock *clock;
+
+  MechPointerInfo pointer_info;
+  MechKeyboardInfo keyboard_info;
+  GHashTable *touch_info;
 
   gchar *title;
 
@@ -120,9 +143,149 @@ mech_window_finalize (GObject *object)
   priv = mech_window_get_instance_private ((MechWindow *) object);
 
   g_free (priv->title);
+  g_object_unref (priv->clock);
+
+  if (priv->pointer_info.crossing_areas)
+    g_ptr_array_unref (priv->pointer_info.crossing_areas);
+  if (priv->pointer_info.grab_areas)
+    g_ptr_array_unref (priv->pointer_info.grab_areas);
+  if (priv->keyboard_info.focus_areas)
+    g_ptr_array_unref (priv->keyboard_info.focus_areas);
+  if (priv->touch_info)
+    g_hash_table_unref (priv->touch_info);
+
   g_object_unref (priv->stage);
 
   G_OBJECT_CLASS (mech_window_parent_class)->finalize (object);
+}
+
+static gboolean
+_mech_window_propagate_event (MechWindow *window,
+                              GPtrArray  *areas,
+                              MechEvent  *event)
+{
+  gboolean handled = FALSE;
+  MechEvent *area_event;
+  MechArea *area;
+  gint i;
+
+  for (i = 0; i < areas->len; i++)
+    {
+      area = g_ptr_array_index (areas, i);
+      area_event = mech_event_translate (event, area);
+      area_event->any.target =
+        g_object_ref (g_ptr_array_index (areas, areas->len - 1));
+      area_event->any.flags |= MECH_EVENT_FLAG_CAPTURE_PHASE;
+      handled = _mech_area_handle_event (area, area_event);
+      mech_event_free (area_event);
+
+      if (handled)
+        break;
+    }
+
+  if (i >= areas->len)
+    i = areas->len - 1;
+
+  while (i >= 0)
+    {
+      area = g_ptr_array_index (areas, i);
+      area_event = mech_event_translate (event, area);
+      area_event->any.target =
+        g_object_ref (g_ptr_array_index (areas, areas->len - 1));
+      handled |= _mech_area_handle_event (area, area_event);
+      mech_event_free (area_event);
+      i--;
+    }
+
+  return handled;
+}
+
+static void
+_mech_window_unset_pointer_grab (MechWindow *window)
+{
+  MechWindowPrivate *priv;
+
+  priv = mech_window_get_instance_private (window);
+
+  if (priv->pointer_info.grab_areas)
+    {
+      g_ptr_array_unref (priv->pointer_info.grab_areas);
+      priv->pointer_info.grab_areas = NULL;
+    }
+}
+
+static void
+_mech_window_update_seat_state (MechWindow *window,
+                                MechEvent  *event,
+                                GPtrArray  *areas,
+                                gboolean    handled)
+{
+  MechWindowPrivate *priv;
+
+  priv = mech_window_get_instance_private (window);
+
+  if (handled && event->type == MECH_BUTTON_PRESS)
+    priv->pointer_info.grab_areas = (handled && areas) ? g_ptr_array_ref (areas) : NULL;
+  else if (event->type == MECH_BUTTON_RELEASE &&
+           priv->pointer_info.grab_areas)
+    {
+      _mech_window_unset_pointer_grab (window);
+    }
+  else if (handled && event->type == MECH_TOUCH_DOWN)
+    {
+      if (!priv->touch_info)
+        priv->touch_info =
+          g_hash_table_new_full (NULL, NULL, NULL,
+                                 (GDestroyNotify) g_ptr_array_unref);
+
+      g_hash_table_insert (priv->touch_info, GINT_TO_POINTER (event->touch.id),
+                           g_ptr_array_ref (areas));
+    }
+  else if (event->type == MECH_TOUCH_UP && priv->touch_info)
+    g_hash_table_remove (priv->touch_info, GINT_TO_POINTER (event->touch.id));
+}
+
+static gboolean
+_mech_window_handle_event_internal (MechWindow *window,
+                                    MechEvent  *event)
+{
+  MechWindowPrivate *priv;
+  GPtrArray *areas = NULL;
+  gboolean retval = FALSE;
+
+  priv = mech_window_get_instance_private (window);
+
+  if (priv->keyboard_info.focus_areas &&
+      (event->type == MECH_KEY_PRESS ||
+       event->type == MECH_KEY_RELEASE))
+    areas = g_ptr_array_ref (priv->keyboard_info.focus_areas);
+  else if (priv->touch_info &&
+           (event->type == MECH_TOUCH_MOTION || event->type == MECH_TOUCH_UP))
+    {
+      areas = g_hash_table_lookup (priv->touch_info,
+                                   GINT_TO_POINTER (event->touch.id));
+      if (areas)
+        g_ptr_array_ref (areas);
+    }
+  else if (priv->pointer_info.grab_areas)
+    areas = g_ptr_array_ref (priv->pointer_info.grab_areas);
+  else
+    areas = _mech_stage_pick_for_event (priv->stage, NULL, event->type,
+                                        event->pointer.x, event->pointer.y);
+
+  if (!areas)
+    {
+      _mech_window_update_seat_state (window, event, NULL, retval);
+      return FALSE;
+    }
+  else
+    {
+      retval = _mech_window_propagate_event (window, areas, event);
+      _mech_window_update_seat_state (window, event, areas, retval);
+      g_ptr_array_unref (areas);
+
+      return retval;
+    }
 }
 
 static void
@@ -133,6 +296,8 @@ mech_window_class_init (MechWindowClass *klass)
   object_class->get_property = mech_window_get_property;
   object_class->set_property = mech_window_set_property;
   object_class->finalize = mech_window_finalize;
+
+  klass->handle_event = _mech_window_handle_event_internal;
 
   signals[SIZE_CHANGED] =
     g_signal_new ("size-changed",
@@ -185,6 +350,20 @@ mech_window_init (MechWindow *window)
   priv = mech_window_get_instance_private (window);
   priv->resizable = TRUE;
   priv->stage = _mech_stage_new ();
+}
+
+gboolean
+mech_window_handle_event (MechWindow *window,
+                          MechEvent  *event)
+{
+  MechWindowClass *window_class;
+
+  window_class = MECH_WINDOW_GET_CLASS (window);
+
+  if (!window_class->handle_event)
+    return FALSE;
+
+  return window_class->handle_event (window, event);
 }
 
 void
@@ -335,6 +514,22 @@ _mech_window_get_clock (MechWindow *window)
 
   priv = mech_window_get_instance_private (window);
   return priv->clock;
+}
+
+MechArea *
+mech_window_get_focus (MechWindow *window)
+{
+  MechWindowPrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_WINDOW (window), NULL);
+
+  priv = mech_window_get_instance_private (window);
+
+  if (!priv->keyboard_info.focus_areas)
+    return NULL;
+
+  return g_ptr_array_index (priv->keyboard_info.focus_areas,
+                            priv->keyboard_info.focus_areas->len - 1);
 }
 
 MechStage *
