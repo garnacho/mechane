@@ -25,6 +25,7 @@ typedef struct _MechArea MechArea;
 #include <mechane/mech-enums.h>
 #include <mechane/mech-window.h>
 #include <mechane/mech-types.h>
+#include <mechane/mech-events.h>
 
 G_BEGIN_DECLS
 

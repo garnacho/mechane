@@ -19,6 +19,7 @@
 #include <mechane/mech-window-private.h>
 #include "mech-window-wayland.h"
 #include "mech-surface-wayland.h"
+#include "mech-clock-wayland.h"
 #include "mech-backend-wayland.h"
 
 struct _MechWindowWaylandPriv
@@ -157,6 +158,7 @@ mech_window_wayland_constructed (GObject *object)
 {
   MechWindowWayland *window = (MechWindowWayland *) object;
   MechWindowWaylandPriv *priv = window->_priv;
+  MechClock *clock;
 
   priv->wl_surface = wl_compositor_create_surface (priv->wl_compositor);
   priv->wl_shell_surface = wl_shell_get_shell_surface (priv->wl_shell,
@@ -165,6 +167,9 @@ mech_window_wayland_constructed (GObject *object)
                                  &shell_surface_listener_funcs,
                                  window);
   wl_shell_surface_set_toplevel (priv->wl_shell_surface);
+
+  clock = _mech_clock_wayland_new (window, priv->wl_surface);
+  _mech_window_set_clock ((MechWindow *) object, clock);
 }
 
 static void

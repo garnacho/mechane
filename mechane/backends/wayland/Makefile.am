@@ -1,5 +1,6 @@
 mech_wayland_sources =			\
 	mech-backend-wayland.c		\
+	mech-clock-wayland.c		\
 	mech-event-source-wayland.c	\
 	mech-surface-wayland.c		\
 	mech-surface-wayland-shm.c	\
