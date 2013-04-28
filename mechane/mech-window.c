@@ -176,6 +176,227 @@ mech_window_finalize (GObject *object)
   G_OBJECT_CLASS (mech_window_parent_class)->finalize (object);
 }
 
+static gint
+_find_common_parent_index (GPtrArray *a,
+                           GPtrArray *b)
+{
+  if (a && b)
+    {
+      MechArea *pa, *pb;
+      gint i;
+
+      for (i = 0; i < MIN (a->len, b->len); i++)
+        {
+          pa = g_ptr_array_index (a, i);
+          pb = g_ptr_array_index (b, i);
+
+          if (pa != pb)
+            break;
+        }
+
+      return i;
+    }
+
+  return 0;
+}
+
+static GHashTable *
+_window_diff_crossing_stack (GPtrArray *old,
+                             GPtrArray *new,
+                             gint       _index)
+{
+  MechArea *area, *old_target, *new_target;
+  GHashTable *change_map;
+  guint flags;
+  gint i;
+
+  change_map = g_hash_table_new (NULL, NULL);
+  old_target = (old) ? g_ptr_array_index (old, old->len - 1) : NULL;
+  new_target = (new) ? g_ptr_array_index (new, new->len - 1) : NULL;
+
+  if (old)
+    {
+      for (i = MIN (_index, old->len - 1); i < old->len; i++)
+        {
+          area = g_ptr_array_index (old, i);
+          g_hash_table_insert (change_map, area,
+                               GUINT_TO_POINTER (CROSSING_LEAVE));
+        }
+    }
+
+  if (new)
+    {
+      for (i = MIN (_index, new->len - 1); i < new->len; i++)
+        {
+          area = g_ptr_array_index (new, i);
+          flags = GPOINTER_TO_UINT (g_hash_table_lookup (change_map, area));
+
+          if (flags != 0)
+            {
+              /* If the old target appears on both lists but is
+               * no longer the target, send 2 events to notify
+               * about the obscure state change
+               */
+              if ((area == old_target) != (area == new_target))
+                flags = CROSSING_ENTER | CROSSING_LEAVE;
+              else
+                {
+                  g_hash_table_remove (change_map, area);
+                  continue;
+                }
+            }
+          else
+            flags = CROSSING_ENTER;
+
+          g_hash_table_insert (change_map, area, GUINT_TO_POINTER (flags));
+        }
+    }
+
+  return change_map;
+}
+
+static void
+_mech_window_send_crossing (MechWindow *window,
+                            MechArea   *area,
+                            MechArea   *target,
+                            MechArea   *other,
+                            MechEvent  *base,
+                            gboolean    in,
+                            gboolean    obscured)
+{
+  MechEvent *event;
+
+  event = mech_event_new ((in) ? MECH_ENTER : MECH_LEAVE);
+
+  event->any.area = g_object_ref (area);
+  event->any.target = g_object_ref (target);
+  event->any.seat = mech_event_get_seat (base);
+  event->crossing.mode = MECH_CROSSING_NORMAL;
+
+  if (other)
+    event->crossing.other_area = g_object_ref (other);
+
+  if (obscured)
+    event->any.flags |= MECH_EVENT_FLAG_CROSSING_OBSCURED;
+
+  _mech_area_handle_event (area, event);
+  mech_event_free (event);
+}
+
+static void
+_mech_window_change_crossing_stack (MechWindow *window,
+                                    GPtrArray  *areas,
+                                    MechEvent  *base_event)
+{
+  MechArea *area, *old_target, *new_target;
+  GHashTable *diff_map = NULL;
+  MechWindowPrivate *priv;
+  gint i, _index = 0;
+  gboolean obscured;
+  GPtrArray *old;
+  guint flags;
+
+  priv = mech_window_get_instance_private (window);
+  old = priv->pointer_info.crossing_areas;
+  _index = _find_common_parent_index (old, areas);
+
+  if (old && areas && old->len == areas->len && _index == old->len)
+    return;
+
+  /* Topmost areas need to be checked for obscure state changes */
+  if (old && areas && (_index == old->len || _index == areas->len))
+    _index--;
+
+  if (old && areas)
+    diff_map = _window_diff_crossing_stack (old, areas, _index);
+
+  old_target = (old) ? g_ptr_array_index (old, old->len - 1) : NULL;
+  new_target = (areas) ? g_ptr_array_index (areas, areas->len - 1) : NULL;
+
+  if (old)
+    {
+      for (i = old->len - 1; i >= _index; i--)
+        {
+          area = g_ptr_array_index (old, i);
+
+          if (diff_map)
+            {
+              flags = GPOINTER_TO_UINT (g_hash_table_lookup (diff_map, area));
+
+              if ((flags & CROSSING_LEAVE) == 0)
+                continue;
+            }
+
+          obscured = area != old_target;
+          _mech_window_send_crossing (window, area, old_target, new_target,
+                                      base_event, FALSE, obscured);
+        }
+    }
+
+  if (areas)
+    {
+      for (i = 0; i < areas->len; i++)
+        {
+          area = g_ptr_array_index (areas, i);
+
+          if (diff_map)
+            {
+              flags = GPOINTER_TO_UINT (g_hash_table_lookup (diff_map, area));
+
+              if ((flags & CROSSING_ENTER) == 0)
+                continue;
+            }
+
+          obscured = area != new_target;
+          _mech_window_send_crossing (window, area, new_target, old_target,
+                                      base_event, TRUE, obscured);
+        }
+    }
+
+  if (diff_map)
+    g_hash_table_destroy (diff_map);
+
+  if (priv->pointer_info.crossing_areas)
+    {
+      g_ptr_array_unref (priv->pointer_info.crossing_areas);
+      priv->pointer_info.crossing_areas = NULL;
+    }
+
+  if (areas)
+    priv->pointer_info.crossing_areas = g_ptr_array_ref (areas);
+}
+
+static gboolean
+_mech_window_handle_crossing (MechWindow *window,
+                              MechEvent  *event)
+{
+  GPtrArray *crossing_areas = NULL;
+  MechWindowPrivate *priv;
+
+  priv = mech_window_get_instance_private (window);
+
+  /* A grab is in effect */
+  if (priv->pointer_info.grab_areas)
+    return FALSE;
+
+  if (event->type == MECH_ENTER ||
+      event->type == MECH_MOTION ||
+      event->type == MECH_BUTTON_RELEASE)
+    crossing_areas = _mech_stage_pick_for_event (priv->stage,
+                                                 NULL, MECH_ENTER,
+                                                 event->pointer.x,
+                                                 event->pointer.y);
+  else if (event->type != MECH_LEAVE)
+    return FALSE;
+
+  _mech_window_change_crossing_stack (window, crossing_areas, event);
+
+  if (crossing_areas)
+    g_ptr_array_unref (crossing_areas);
+
+  return TRUE;
+}
+
 static gboolean
 _mech_window_propagate_event (MechWindow *window,
                               GPtrArray  *areas,
@@ -247,6 +468,7 @@ _mech_window_update_seat_state (MechWindow *window,
            priv->pointer_info.grab_areas)
     {
       _mech_window_unset_pointer_grab (window);
+      _mech_window_handle_crossing (window, event);
     }
   else if (handled && event->type == MECH_TOUCH_DOWN)
     {
@@ -271,6 +493,13 @@ _mech_window_handle_event_internal (MechWindow *window,
   gboolean retval = FALSE;
 
   priv = mech_window_get_instance_private (window);
+
+  if (_mech_window_handle_crossing (window, event))
+    {
+      if (event->type == MECH_ENTER ||
+          event->type == MECH_LEAVE)
+        return TRUE;
+    }
 
   if (priv->keyboard_info.focus_areas &&
       (event->type == MECH_KEY_PRESS ||
