@@ -200,6 +200,74 @@ _find_common_parent_index (GPtrArray *a,
   return 0;
 }
 
+static void
+_mech_window_send_focus (MechWindow *window,
+                         MechArea   *area,
+                         MechArea   *target,
+                         MechArea   *other,
+                         MechSeat   *seat,
+                         gboolean    in)
+{
+  MechEvent *event;
+
+  event = mech_event_new ((in) ? MECH_FOCUS_IN : MECH_FOCUS_OUT);
+  event->any.area = g_object_ref (area);
+  event->any.target = g_object_ref (target);
+  event->any.seat = seat;
+
+  if (other)
+    event->crossing.other_area = g_object_ref (other);
+
+  _mech_area_handle_event (area, event);
+  mech_event_free (event);
+}
+
+static void
+_mech_window_change_focus_stack (MechWindow *window,
+                                 GPtrArray  *array,
+                                 MechSeat   *seat)
+{
+  MechArea *area, *old_target, *new_target;
+  MechWindowPrivate *priv;
+  gint i, common_index;
+  GPtrArray *old;
+
+  priv = mech_window_get_instance_private (window);
+  old_target = new_target = NULL;
+  old = priv->keyboard_info.focus_areas;
+  common_index = _find_common_parent_index (old, array);
+
+  if (old)
+    old_target = g_ptr_array_index (old, old->len - 1);
+  if (array)
+    new_target = g_ptr_array_index (array, array->len - 1);
+
+  if (old)
+    {
+      for (i = old->len - 1; i >= common_index; i--)
+        {
+          area = g_ptr_array_index (old, i);
+          _mech_window_send_focus (window, area, old_target,
+                                   new_target, seat, FALSE);
+        }
+
+      g_ptr_array_unref (priv->keyboard_info.focus_areas);
+      priv->keyboard_info.focus_areas = NULL;
+    }
+
+  if (array)
+    {
+      for (i = common_index; i < array->len; i++)
+        {
+          area = g_ptr_array_index (array, i);
+          _mech_window_send_focus (window, area, new_target,
+                                   old_target, seat, TRUE);
+        }
+
+      priv->keyboard_info.focus_areas = array;
+    }
+}
+
 static GHashTable *
 _window_diff_crossing_stack (GPtrArray *old,
                              GPtrArray *new,
@@ -871,6 +939,40 @@ _mech_window_get_stage (MechWindow *window)
 
   priv = mech_window_get_instance_private (window);
   return priv->stage;
+}
+
+void
+_mech_window_grab_focus (MechWindow *window,
+			 MechArea   *area,
+                         MechSeat   *seat)
+{
+  GPtrArray *focus_areas;
+  guint n_elements;
+  GNode *node;
+
+  g_return_if_fail (MECH_IS_WINDOW (window));
+  g_return_if_fail (MECH_IS_AREA (area));
+
+  if (area == mech_window_get_focus (window))
+    return;
+
+  node = _mech_area_get_node (area);
+  n_elements = g_node_depth (node);
+  focus_areas = g_ptr_array_new_with_free_func ((GDestroyNotify) g_object_unref);
+  g_ptr_array_set_size (focus_areas, n_elements);
+
+  while (node && n_elements > 0)
+    {
+      gpointer *elem;
+
+      n_elements--;
+      elem = &g_ptr_array_index (focus_areas, n_elements);
+      *elem = g_object_ref (node->data);
+      node = node->parent;
+    }
+
+  g_assert (!node && n_elements == 0);
+  _mech_window_change_focus_stack (window, focus_areas, seat);
 }
 
 gboolean

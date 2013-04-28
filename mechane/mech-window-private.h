@@ -24,6 +24,9 @@
 
 G_BEGIN_DECLS
 
+void         _mech_window_grab_focus         (MechWindow  *window,
+                                              MechArea    *area,
+                                              MechSeat    *seat);
 void         _mech_window_set_clock          (MechWindow  *window,
 					      MechClock   *clock);
 MechClock  * _mech_window_get_clock          (MechWindow  *window);

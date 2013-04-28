@@ -150,6 +150,8 @@ gboolean         mech_area_is_visible           (MechArea          *area);
 gint             mech_area_get_depth            (MechArea          *area);
 void             mech_area_set_depth            (MechArea          *area,
                                                  gint               depth);
+void             mech_area_grab_focus           (MechArea          *area,
+                                                 MechSeat          *seat);
 
 cairo_region_t  * mech_area_get_shape           (MechArea          *area);
 

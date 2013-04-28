@@ -1320,3 +1320,16 @@ mech_area_get_shape (MechArea *area)
 
   return MECH_AREA_GET_CLASS (area)->get_shape (area);
 }
+
+void
+mech_area_grab_focus (MechArea *area,
+                      MechSeat *seat)
+{
+  MechWindow *window;
+
+  g_return_if_fail (MECH_IS_AREA (area));
+  g_return_if_fail (MECH_IS_SEAT (seat));
+
+  window = mech_area_get_window (area);
+  _mech_window_grab_focus (window, area, seat);
+}
