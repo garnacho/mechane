@@ -15,23 +15,38 @@
  * License along with this library. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __MECHANE_H__
-#define __MECHANE_H__
-
-#include <glib-object.h>
-
-G_BEGIN_DECLS
-
-/* Base */
 #include <mechane/mech-seat.h>
-#include <mechane/mech-enum-types.h>
-#include <mechane/mech-enums.h>
-#include <mechane/mech-events.h>
-#include <mechane/mech-monitor.h>
-#include <mechane/mech-monitor-layout.h>
-#include <mechane/mech-area.h>
-#include <mechane/mech-window.h>
 
-G_END_DECLS
+G_DEFINE_ABSTRACT_TYPE (MechSeat, mech_seat, G_TYPE_OBJECT)
 
-#endif /* __MECHANE_H__ */
+static void
+mech_seat_class_init (MechSeatClass *klass)
+{
+}
+
+static void
+mech_seat_init (MechSeat *seat)
+{
+}
+
+guint
+mech_seat_get_modifiers (MechSeat *seat,
+                         guint    *active,
+                         guint    *latched,
+                         guint    *locked)
+{
+  guint act, lat, loc;
+
+  g_return_val_if_fail (MECH_IS_SEAT (seat), 0);
+
+  MECH_SEAT_GET_CLASS (seat)->get_modifiers (seat, &act, &lat, &loc);
+
+  if (active)
+    *active = act;
+  if (latched)
+    *latched = lat;
+  if (locked)
+    *locked = loc;
+
+  return act | lat | loc;
+}

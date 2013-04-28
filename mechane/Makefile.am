@@ -14,6 +14,7 @@ mech_sources = 			\
 	mech-events.c		\
 	mech-monitor.c		\
 	mech-monitor-layout.c	\
+	mech-seat.c		\
 	mech-stage.c		\
 	mech-surface.c		\
 	mech-types.c		\
