@@ -20,6 +20,7 @@
 #include <string.h>
 #include "mech-backend-wayland.h"
 #include "mech-event-source-wayland.h"
+#include "mech-window-wayland.h"
 #include "mech-surface-wayland.h"
 
 G_DEFINE_TYPE (MechBackendWayland, _mech_backend_wayland, MECH_TYPE_BACKEND)
@@ -28,6 +29,23 @@ struct _MechBackendWaylandPriv
 {
   MechEventSourceWayland *event_source;
 };
+
+static MechWindow *
+_mech_backend_wayland_create_window (MechBackend *backend)
+{
+  MechBackendWayland *backend_wayland = (MechBackendWayland *) backend;
+  struct wl_surface *wl_surface;
+  MechWindow *window;
+
+  window = g_object_new (MECH_TYPE_WINDOW_WAYLAND,
+                         "wl-compositor", backend_wayland->wl_compositor,
+                         "wl-shell", backend_wayland->wl_shell,
+                         NULL);
+
+  g_object_get (window, "wl-surface", &wl_surface, NULL);
+
+  return window;
+}
 
 static MechSurface *
 _mech_backend_wayland_create_surface (MechBackend *backend)
@@ -40,6 +58,7 @@ _mech_backend_wayland_class_init (MechBackendWaylandClass *klass)
 {
   MechBackendClass *backend_class = MECH_BACKEND_CLASS (klass);
 
+  backend_class->create_window = _mech_backend_wayland_create_window;
   backend_class->create_surface = _mech_backend_wayland_create_surface;
 
   g_type_class_add_private (klass, sizeof (MechBackendWaylandPriv));

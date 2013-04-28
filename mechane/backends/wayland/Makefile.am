@@ -2,7 +2,8 @@ mech_wayland_sources =			\
 	mech-backend-wayland.c		\
 	mech-event-source-wayland.c	\
 	mech-surface-wayland.c		\
-	mech-surface-wayland-shm.c
+	mech-surface-wayland-shm.c	\
+	mech-window-wayland.c
 
 AM_CPPFLAGS = $(MECH_DEPS_CFLAGS) $(MECH_WAYLAND_DEPS_CFLAGS)
 
