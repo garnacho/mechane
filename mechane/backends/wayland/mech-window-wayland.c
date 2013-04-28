@@ -29,6 +29,7 @@ struct _MechWindowWaylandPriv
   struct wl_surface *wl_surface;
   struct wl_shell_surface *wl_shell_surface;
   MechSurface *surface;
+  GSList *outputs;
 };
 
 enum {
@@ -100,6 +101,54 @@ mech_window_wayland_finalize (GObject *object)
 }
 
 static void
+_window_surface_enter (gpointer           data,
+                       struct wl_surface *wl_surface,
+                       struct wl_output  *wl_output)
+{
+  MechWindowWaylandPriv *priv;
+  MechBackendWayland *backend;
+  MechWindow *window = data;
+  MechMonitor *monitor;
+
+  priv = ((MechWindowWayland *) window)->_priv;
+  backend = _mech_backend_wayland_get ();
+  monitor = _mech_backend_wayland_lookup_output (backend, wl_output);
+  g_assert (monitor != NULL);
+
+  priv->outputs = g_slist_prepend (priv->outputs, monitor);
+
+  if (!mech_window_get_monitor (window))
+    _mech_window_set_monitor (window, monitor);
+}
+
+static void
+_window_surface_leave (gpointer           data,
+                       struct wl_surface *wl_surface,
+                       struct wl_output  *wl_output)
+{
+  MechWindowWaylandPriv *priv;
+  MechBackendWayland *backend;
+  MechWindow *window = data;
+  MechMonitor *monitor;
+
+  priv = ((MechWindowWayland *) window)->_priv;
+  backend = _mech_backend_wayland_get ();
+  monitor = _mech_backend_wayland_lookup_output (backend, wl_output);
+  g_assert (monitor != NULL);
+
+  priv->outputs = g_slist_remove (priv->outputs, monitor);
+
+  if (monitor == mech_window_get_monitor (window))
+    _mech_window_set_monitor (window,
+                              priv->outputs ? priv->outputs->data : NULL);
+}
+
+static const struct wl_surface_listener surface_listener_funcs = {
+  _window_surface_enter,
+  _window_surface_leave
+};
+
+static void
 _window_shell_surface_ping (gpointer                 data,
                             struct wl_shell_surface *wl_shell_surface,
                             guint32                  serial)
@@ -161,6 +210,8 @@ mech_window_wayland_constructed (GObject *object)
   MechClock *clock;
 
   priv->wl_surface = wl_compositor_create_surface (priv->wl_compositor);
+  wl_surface_add_listener (priv->wl_surface, &surface_listener_funcs, window);
+
   priv->wl_shell_surface = wl_shell_get_shell_surface (priv->wl_shell,
                                                        priv->wl_surface);
   wl_shell_surface_add_listener (priv->wl_shell_surface,
