@@ -18,11 +18,15 @@
 #ifndef __MECH_WINDOW_PRIVATE_H__
 #define __MECH_WINDOW_PRIVATE_H__
 
+#include <mechane/mech-clock-private.h>
 #include <mechane/mech-stage-private.h>
 #include <mechane/mech-window.h>
 
 G_BEGIN_DECLS
 
+void         _mech_window_set_clock          (MechWindow  *window,
+					      MechClock   *clock);
+MechClock  * _mech_window_get_clock          (MechWindow  *window);
 MechStage  * _mech_window_get_stage          (MechWindow  *window);
 
 G_END_DECLS

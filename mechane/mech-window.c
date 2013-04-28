@@ -30,6 +30,7 @@ typedef struct _MechWindowPrivate MechWindowPrivate;
 struct _MechWindowPrivate
 {
   MechStage *stage;
+  MechClock *clock;
 
   gchar *title;
 
@@ -271,6 +272,35 @@ mech_window_get_size (MechWindow *window,
   priv = mech_window_get_instance_private (window);
 
   _mech_stage_get_size (priv->stage, width, height);
+}
+
+void
+_mech_window_set_clock (MechWindow *window,
+                        MechClock  *clock)
+{
+  MechWindowPrivate *priv;
+
+  priv = mech_window_get_instance_private (window);
+
+  if (priv->clock)
+    {
+      g_object_unref (priv->clock);
+      priv->clock = NULL;
+    }
+
+  if (clock)
+    {
+      priv->clock = g_object_ref (clock);
+    }
+}
+
+MechClock *
+_mech_window_get_clock (MechWindow *window)
+{
+  MechWindowPrivate *priv;
+
+  priv = mech_window_get_instance_private (window);
+  return priv->clock;
 }
 
 MechStage *
