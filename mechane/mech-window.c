@@ -540,3 +540,32 @@ _mech_window_get_stage (MechWindow *window)
   priv = mech_window_get_instance_private (window);
   return priv->stage;
 }
+
+gboolean
+mech_window_move (MechWindow *window,
+                  MechEvent  *event)
+{
+  g_return_val_if_fail (MECH_IS_WINDOW (window), FALSE);
+  g_return_val_if_fail (event != NULL, FALSE);
+
+  if (event->type != MECH_KEY_PRESS && event->type == MECH_KEY_PRESS &&
+      event->type != MECH_BUTTON_PRESS && event->type == MECH_BUTTON_RELEASE)
+    return FALSE;
+
+  return MECH_WINDOW_GET_CLASS (window)->move (window, event);
+}
+
+gboolean
+mech_window_resize (MechWindow    *window,
+                    MechEvent     *event,
+                    MechSideFlags  side)
+{
+  g_return_val_if_fail (MECH_IS_WINDOW (window), FALSE);
+  g_return_val_if_fail (event != NULL, FALSE);
+
+  if (event->type != MECH_KEY_PRESS && event->type == MECH_KEY_PRESS &&
+      event->type != MECH_BUTTON_PRESS && event->type == MECH_BUTTON_RELEASE)
+    return FALSE;
+
+  return MECH_WINDOW_GET_CLASS (window)->resize (window, event, side);
+}

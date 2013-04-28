@@ -47,6 +47,11 @@ struct _MechWindowClass
   gboolean (* handle_event)  (MechWindow        *window,
                               MechEvent         *event);
 
+  gboolean (* move)          (MechWindow        *window,
+                              MechEvent         *event);
+  gboolean (* resize)        (MechWindow        *window,
+                              MechEvent         *event,
+                              MechSideFlags      side);
   void     (* set_title)     (MechWindow        *window,
                               const gchar       *title);
   void     (* set_visible)   (MechWindow        *window,
@@ -79,6 +84,12 @@ void              mech_window_set_title     (MechWindow      *window,
 const gchar     * mech_window_get_title     (MechWindow      *window);
 
 MechMonitor     * mech_window_get_monitor   (MechWindow      *window);
+
+gboolean          mech_window_move          (MechWindow      *window,
+                                             MechEvent       *event);
+gboolean          mech_window_resize        (MechWindow      *window,
+                                             MechEvent       *event,
+                                             MechSideFlags    side);
 
 G_END_DECLS
 
