@@ -35,6 +35,9 @@ gboolean         _mech_area_get_visible_rect      (MechArea          *area,
 gboolean         _mech_area_get_renderable_rect   (MechArea          *area,
                                                    cairo_rectangle_t *rect);
 cairo_region_t * _mech_area_get_renderable_region (MechArea          *area);
+void             _mech_area_guess_offscreen_size  (MechArea          *area,
+                                                   gint              *width,
+                                                   gint              *height);
 void             _mech_area_get_stage_rect        (MechArea          *area,
                                                    cairo_rectangle_t *rect);
 

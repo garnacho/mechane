@@ -16,6 +16,7 @@
  */
 
 #include <math.h>
+#include <cairo/cairo-gobject.h>
 
 #include <mechane/mech-stage-private.h>
 #include <mechane/mech-area-private.h>
@@ -33,6 +34,8 @@ typedef struct _StageNode StageNode;
 typedef struct _OffscreenNode OffscreenNode;
 typedef struct _TraverseStageContext TraverseStageContext;
 typedef struct _PickStageContext PickStageContext;
+typedef struct _RenderingTarget RenderingTarget;
+typedef struct _RenderStageContext RenderStageContext;
 
 typedef enum {
   TRAVERSE_FLAG_STOP     = 0,
@@ -77,6 +80,20 @@ struct _TraverseStageContext
   VisitNodeFunc visit;
 };
 
+struct _RenderingTarget
+{
+  OffscreenNode *offscreen;
+  cairo_region_t *invalidated;
+  cairo_t *cr;
+};
+
+struct _RenderStageContext
+{
+  TraverseStageContext functions;
+  GArray *target_stack;
+  cairo_t *cr;
+};
+
 struct _PickStageContext
 {
   TraverseStageContext functions;
@@ -94,6 +111,7 @@ struct _MechStagePrivate
 
   gint width;
   gint height;
+  guint draw_signal_id;
 };
 
 static GQuark quark_area_offscreen = 0;
@@ -206,6 +224,269 @@ _mech_stage_destroy_offscreen_node (OffscreenNode *offscreen,
 
   g_object_unref (offscreen->node.data);
   g_node_unlink ((GNode *) offscreen);
+}
+
+static OffscreenNode *
+_mech_stage_check_needs_offscreen (MechStage *stage,
+                                   MechArea  *area)
+{
+  OffscreenNode *offscreen;
+
+  offscreen = _area_peek_offscreen (area);
+
+  if (mech_area_get_matrix (area, NULL))
+    {
+      if (!offscreen)
+        {
+          offscreen = _mech_stage_create_offscreen_node (stage, area);
+          g_object_set_qdata ((GObject *) area, quark_area_offscreen, offscreen);
+        }
+    }
+  else if (offscreen)
+    {
+      _mech_stage_destroy_offscreen_node (offscreen, FALSE);
+      g_object_set_qdata ((GObject *) area, quark_area_offscreen, NULL);
+      offscreen = NULL;
+    }
+
+  return offscreen;
+}
+
+
+static void
+_mech_stage_update_offscreen (MechStage     *stage,
+                              OffscreenNode *offscreen)
+{
+  gint width, height;
+
+  _mech_area_guess_offscreen_size (offscreen->area, &width, &height);
+  _mech_surface_set_size (offscreen->node.data, width, height);
+}
+
+static RenderingTarget *
+render_stage_context_push_target (RenderStageContext *context,
+                                  OffscreenNode      *offscreen)
+{
+  RenderingTarget target = { 0 };
+
+  if (!context->target_stack)
+    context->target_stack = g_array_new (FALSE, FALSE,
+                                         sizeof (RenderingTarget));
+
+  target.offscreen = offscreen;
+
+  if (offscreen->node.parent)
+    target.cr = _mech_surface_cairo_create (offscreen->node.data);
+  else
+    target.cr = cairo_reference (context->cr);
+
+  target.invalidated =
+    _mech_surface_apply_clip (offscreen->node.data, target.cr);
+  g_array_append_val (context->target_stack, target);
+
+  return &g_array_index (context->target_stack, RenderingTarget,
+                         context->target_stack->len - 1);
+}
+
+static RenderingTarget *
+render_stage_context_lookup_target (RenderStageContext *context)
+{
+  if (context->target_stack && context->target_stack->len > 0)
+    return &g_array_index (context->target_stack, RenderingTarget,
+                           context->target_stack->len - 1);
+  return NULL;
+}
+
+static OffscreenNode *
+render_stage_context_pop_target (RenderStageContext *context)
+{
+  OffscreenNode *offscreen;
+  RenderingTarget *target;
+
+  target = render_stage_context_lookup_target (context);
+  g_assert (target != NULL);
+
+  cairo_destroy (target->cr);
+  cairo_region_destroy (target->invalidated);
+  offscreen = target->offscreen;
+
+  g_array_remove_index (context->target_stack,
+                        context->target_stack->len - 1);
+
+  return offscreen;
+}
+
+static gboolean
+render_stage_context_area_overlaps_clip (RenderStageContext *context,
+                                         MechStage          *stage,
+                                         MechArea           *area)
+{
+  cairo_rectangle_t renderable, alloc, parent;
+  cairo_rectangle_int_t rect;
+  RenderingTarget *target;
+
+  target = render_stage_context_lookup_target (context);
+
+  if (cairo_region_is_empty (target->invalidated))
+    return FALSE;
+
+  _mech_stage_get_renderable_rect (stage, area, &renderable);
+  _mech_area_get_stage_rect (target->offscreen->area, &parent);
+  _mech_area_get_stage_rect (area, &alloc);
+
+  renderable.x += alloc.x - parent.x;
+  renderable.y += alloc.y - parent.y;
+
+  rect.x = floor (renderable.x);
+  rect.y = floor (renderable.y);
+  rect.width = ceil (renderable.width);
+  rect.height = ceil (renderable.height);
+
+  return cairo_region_contains_rectangle (target->invalidated,
+                                          &rect) != CAIRO_REGION_OVERLAP_OUT;
+}
+
+static gboolean
+render_stage_enter (MechStage          *stage,
+                    GNode              *node,
+                    RenderStageContext *context)
+{
+  MechArea *area = node->data;
+  OffscreenNode *offscreen;
+  RenderingTarget *target;
+  cairo_rectangle_t rect;
+  cairo_matrix_t matrix;
+  gboolean has_matrix;
+
+  has_matrix = mech_area_get_matrix (area, &matrix);
+  target = render_stage_context_lookup_target (context);
+  cairo_save (target->cr);
+
+  if (!mech_area_get_visible (area))
+    return FALSE;
+
+  _mech_area_get_stage_rect (area, &rect);
+
+  if (rect.width < 1 || rect.height < 1)
+    return FALSE;
+
+  if (!has_matrix &&
+      !render_stage_context_area_overlaps_clip (context, stage, area))
+    return FALSE;
+
+  if (node->parent)
+    {
+      cairo_rectangle_t parent;
+
+      _mech_area_get_stage_rect (node->parent->data, &parent);
+      cairo_translate (target->cr, rect.x - parent.x, rect.y - parent.y);
+    }
+
+  if (has_matrix)
+    {
+      cairo_matrix_t cur;
+
+      cairo_get_matrix (target->cr, &cur);
+      cairo_matrix_multiply (&cur, &matrix, &cur);
+      cairo_set_matrix (target->cr, &cur);
+    }
+
+  offscreen = _mech_stage_check_needs_offscreen (stage, area);
+
+  if (offscreen)
+    {
+      _mech_stage_update_offscreen (stage, offscreen);
+      render_stage_context_push_target (context, offscreen);
+
+      /* Check again using the new target's invalidated area */
+      if (!render_stage_context_area_overlaps_clip (context, stage, area))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
+static void
+render_stage_leave (MechStage          *stage,
+                    GNode              *node,
+                    RenderStageContext *context)
+{
+  MechArea *area = node->data;
+  RenderingTarget *target;
+  cairo_rectangle_t rect;
+
+  target = render_stage_context_lookup_target (context);
+
+  if (target->offscreen->area == area && !G_NODE_IS_ROOT (node))
+    {
+      OffscreenNode *offscreen;
+
+      offscreen = render_stage_context_pop_target (context);
+      target = render_stage_context_lookup_target (context);
+      _mech_surface_set_source (target->cr, offscreen->node.data);
+      cairo_paint (target->cr);
+    }
+
+  cairo_restore (target->cr);
+}
+
+static TraverseFlags
+render_stage_visit (MechStage          *stage,
+                    const GNode        *node,
+                    RenderStageContext *context)
+{
+  MechArea *area = node->data;
+  RenderingTarget *target;
+  cairo_rectangle_t rect;
+  MechStagePrivate *priv;
+
+  priv = mech_stage_get_instance_private (stage);
+  target = render_stage_context_lookup_target (context);
+  _mech_area_get_stage_rect (area, &rect);
+
+  if (mech_area_get_clip (area))
+    {
+      cairo_rectangle (target->cr, 0, 0, rect.width, rect.height);
+      cairo_clip (target->cr);
+    }
+
+  if (priv->draw_signal_id == 0)
+    priv->draw_signal_id = g_signal_lookup ("draw", MECH_TYPE_AREA);
+
+  cairo_save (target->cr);
+  g_signal_emit (area, priv->draw_signal_id, 0, target->cr);
+  cairo_restore (target->cr);
+
+  return TRAVERSE_FLAG_CONTINUE | TRAVERSE_FLAG_RECURSE;
+}
+
+static void
+render_stage_context_init (RenderStageContext *context,
+                           MechStage          *stage,
+                           cairo_t            *cr)
+{
+  MechStagePrivate *priv = mech_stage_get_instance_private (stage);
+
+  context->functions.enter = (EnterNodeFunc) render_stage_enter;
+  context->functions.leave = (LeaveNodeFunc) render_stage_leave;
+  context->functions.visit = (VisitNodeFunc) render_stage_visit;
+  context->cr = cairo_reference (cr);
+  context->target_stack = NULL;
+
+  render_stage_context_push_target (context, priv->offscreens);
+}
+
+static void
+render_stage_context_finish (RenderStageContext *context)
+{
+  render_stage_context_pop_target (context);
+  cairo_destroy (context->cr);
+
+  g_assert (context->target_stack == NULL ||
+            context->target_stack->len == 0);
+
+  if (context->target_stack)
+    g_array_unref (context->target_stack);
 }
 
 /* Picking */
@@ -576,6 +857,17 @@ _mech_stage_set_size (MechStage *stage,
   *height = priv->height;
 
   return TRUE;
+}
+
+void
+_mech_stage_render (MechStage *stage,
+                    cairo_t   *cr)
+{
+  RenderStageContext context;
+
+  render_stage_context_init (&context, stage, cr);
+  _mech_stage_traverse (stage, &context.functions, NULL, FALSE);
+  render_stage_context_finish (&context);
 }
 
 GPtrArray *

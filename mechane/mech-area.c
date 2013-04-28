@@ -49,6 +49,7 @@ enum {
 };
 
 enum {
+  DRAW,
   HANDLE_EVENT,
   VISIBILITY_CHANGED,
   LAST_SIGNAL
@@ -354,6 +355,15 @@ mech_area_class_init (MechAreaClass *klass)
                                                        CAIRO_GOBJECT_TYPE_MATRIX,
                                                        G_PARAM_READWRITE |
                                                        G_PARAM_STATIC_STRINGS));
+  signals[DRAW] =
+    g_signal_new ("draw",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST,
+                  G_STRUCT_OFFSET (MechAreaClass, draw),
+                  NULL, NULL,
+                  g_cclosure_marshal_VOID__BOXED,
+                  G_TYPE_NONE, 1,
+                  CAIRO_GOBJECT_TYPE_CONTEXT | G_SIGNAL_TYPE_STATIC_SCOPE);
   signals[HANDLE_EVENT] =
     g_signal_new ("handle-event",
                   G_TYPE_FROM_CLASS (klass),
@@ -899,6 +909,37 @@ _mech_area_get_visible_rect (MechArea          *area,
     return FALSE;
 
   return TRUE;
+}
+
+void
+_mech_area_guess_offscreen_size (MechArea *area,
+                                 gint     *width,
+                                 gint     *height)
+{
+  MechPoint tl, tr, bl, br;
+  gdouble x1, x2, y1, y2;
+  MechAreaPrivate *priv;
+  GNode *clipping_node;
+
+  priv = mech_area_get_instance_private (area);
+  clipping_node = priv->node->parent;
+
+  while (clipping_node->parent &&
+         !mech_area_get_clip (clipping_node->data))
+    clipping_node = clipping_node->parent;
+
+  mech_area_transform_corners (clipping_node->data, NULL,
+                               &tl, &tr, &bl, &br);
+
+  x1 = MIN (MIN (tl.x, tr.x), MIN (bl.x, br.x));
+  x2 = MAX (MAX (tl.x, tr.x), MAX (bl.x, br.x));
+  y1 = MIN (MIN (tl.y, tr.y), MIN (bl.y, br.y));
+  y2 = MAX (MAX (tl.y, tr.y), MAX (bl.y, br.y));
+
+  if (width)
+    *width = x2 - x1;
+  if (height)
+    *height = y2 - y1;
 }
 
 void

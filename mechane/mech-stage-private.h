@@ -43,6 +43,8 @@ struct _MechStageClass
 GType       _mech_stage_get_type            (void) G_GNUC_CONST;
 MechStage * _mech_stage_new                 (void);
 
+void        _mech_stage_render              (MechStage       *stage,
+                                             cairo_t         *cr);
 void        _mech_stage_get_size            (MechStage       *stage,
                                              gint            *width,
                                              gint            *height);
