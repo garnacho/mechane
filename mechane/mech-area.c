@@ -826,6 +826,37 @@ mech_area_handles_event (MechArea      *area,
 }
 
 gboolean
+_mech_area_get_renderable_rect (MechArea          *area,
+                                cairo_rectangle_t *rect)
+{
+  MechStage *stage;
+
+  stage = _mech_area_get_stage (area);
+
+  if (!stage)
+    return FALSE;
+
+  return _mech_stage_get_renderable_rect (stage, area, rect);
+}
+
+cairo_region_t *
+_mech_area_get_renderable_region (MechArea *area)
+{
+  cairo_rectangle_int_t int_rect;
+  cairo_rectangle_t rect;
+
+  if (!_mech_area_get_renderable_rect (area, &rect))
+    return cairo_region_create ();
+
+  int_rect.x = rect.x;
+  int_rect.y = rect.y;
+  int_rect.width = rect.width;
+  int_rect.height = rect.height;
+
+  return cairo_region_create_rectangle (&int_rect);
+}
+
+gboolean
 _mech_area_get_visible_rect (MechArea          *area,
                              cairo_rectangle_t *rect)
 {

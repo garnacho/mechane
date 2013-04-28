@@ -619,3 +619,67 @@ _mech_surface_apply_clip (MechSurface *surface,
 
   return region;
 }
+
+gboolean
+_mech_surface_area_is_rendered (MechSurface       *surface,
+                                MechArea          *area,
+                                cairo_rectangle_t *rect)
+{
+  cairo_rectangle_int_t shape_rect;
+  cairo_rectangle_t alloc, parent;
+  gdouble x1, y1, x2, y2, dx, dy;
+  MechSurfacePrivate *priv;
+  cairo_region_t *region;
+  GNode *parent_node;
+
+  priv = mech_surface_get_instance_private (surface);
+
+  if (area == priv->area)
+    {
+      if (rect)
+        *rect = priv->cached_rect;
+      return TRUE;
+    }
+
+  parent_node = _mech_area_get_node (area)->parent;
+
+  while (parent_node && parent_node->data != priv->area)
+    {
+      if (mech_area_get_clip (parent_node->data))
+        break;
+
+      parent_node = parent_node->parent;
+    }
+
+  if (!parent_node)
+    return FALSE;
+
+  _mech_area_get_stage_rect (area, &alloc);
+  _mech_area_get_stage_rect (priv->area, &parent);
+  dx = alloc.x - parent.x;
+  dy = alloc.y - parent.y;
+
+  region = mech_area_get_shape (area);
+  cairo_region_translate (region, dx, dy);
+  cairo_region_get_extents (region, &shape_rect);
+  cairo_region_destroy (region);
+
+  x1 = CLAMP (shape_rect.x, priv->cached_rect.x,
+              priv->cached_rect.x + priv->cached_rect.width);
+  y1 = CLAMP (shape_rect.y, priv->cached_rect.y,
+              priv->cached_rect.y + priv->cached_rect.height);
+  x2 = CLAMP (shape_rect.x + shape_rect.width, priv->cached_rect.x,
+              priv->cached_rect.x + priv->cached_rect.width);
+  y2 = CLAMP (shape_rect.y + shape_rect.height, priv->cached_rect.y,
+              priv->cached_rect.y + priv->cached_rect.height);
+
+  if (rect)
+    {
+      rect->x = x1 - dx;
+      rect->y = y1 - dy;
+      rect->width = x2 - x1;
+      rect->height = y2 - y1;
+    }
+
+  return x2 > x1 && y2 > y1;
+}

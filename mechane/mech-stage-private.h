@@ -76,6 +76,10 @@ GPtrArray * _mech_stage_pick_for_event      (MechStage       *stage,
 void        _mech_stage_notify_depth_change (MechStage       *stage,
                                              MechArea        *area);
 
+gboolean    _mech_stage_get_renderable_rect (MechStage         *stage,
+                                             MechArea          *area,
+                                             cairo_rectangle_t *rect);
+
 G_END_DECLS
 
 #endif /* __MECH_STAGE_H__ */

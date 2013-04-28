@@ -28,10 +28,13 @@ GNode          * _mech_area_get_node              (MechArea          *area);
 
 void             _mech_area_make_window_root      (MechArea          *area,
                                                    MechWindow        *window);
-gboolean         _mech_area_get_visible_rect      (MechArea          *area,
-                                                   cairo_rectangle_t *rect);
 gboolean         _mech_area_handle_event          (MechArea          *area,
                                                    MechEvent         *event);
+gboolean         _mech_area_get_visible_rect      (MechArea          *area,
+                                                   cairo_rectangle_t *rect);
+gboolean         _mech_area_get_renderable_rect   (MechArea          *area,
+                                                   cairo_rectangle_t *rect);
+cairo_region_t * _mech_area_get_renderable_region (MechArea          *area);
 void             _mech_area_get_stage_rect        (MechArea          *area,
                                                    cairo_rectangle_t *rect);
 

@@ -663,3 +663,18 @@ _mech_stage_notify_depth_change (MechStage *stage,
                       (StageNode *) sibling,
                       (StageNode *) node);
 }
+
+gboolean
+_mech_stage_get_renderable_rect (MechStage         *stage,
+                                 MechArea          *area,
+                                 cairo_rectangle_t *rect)
+{
+  OffscreenNode *offscreen;
+
+  offscreen = _mech_stage_find_container_offscreen (stage, area, FALSE);
+
+  if (!offscreen)
+    return FALSE;
+
+  return _mech_surface_area_is_rendered (offscreen->node.data, area, rect);
+}
