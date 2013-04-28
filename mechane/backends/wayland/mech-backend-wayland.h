@@ -54,6 +54,8 @@ GType                _mech_backend_wayland_get_type      (void) G_GNUC_CONST;
 
 MechBackendWayland * _mech_backend_wayland_get           (void);
 
+MechWindow         * _mech_backend_wayland_lookup_window (MechBackendWayland *backend,
+                                                          struct wl_surface  *wl_surface);
 MechMonitor        * _mech_backend_wayland_lookup_output (MechBackendWayland *backend,
                                                           struct wl_output   *wl_output);
 

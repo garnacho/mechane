@@ -24,12 +24,15 @@
 #include "mech-monitor-wayland.h"
 #include "mech-window-wayland.h"
 #include "mech-surface-wayland.h"
+#include "mech-seat-wayland.h"
 
 G_DEFINE_TYPE (MechBackendWayland, _mech_backend_wayland, MECH_TYPE_BACKEND)
 
 struct _MechBackendWaylandPriv
 {
   MechEventSourceWayland *event_source;
+  MechSeat *seat;
+  GHashTable *windows;
   GHashTable *outputs;
 };
 
@@ -46,6 +49,8 @@ _mech_backend_wayland_create_window (MechBackend *backend)
                          NULL);
 
   g_object_get (window, "wl-surface", &wl_surface, NULL);
+  g_hash_table_insert (backend_wayland->_priv->windows,
+                       wl_surface, window);
 
   return window;
 }
@@ -83,6 +88,13 @@ _backend_registry_handle_global (gpointer            user_data,
     backend->wl_shm = wl_registry_bind (registry, id, &wl_shm_interface, 1);
   else if (strcmp (interface, "wl_shell") == 0)
     backend->wl_shell = wl_registry_bind (registry, id, &wl_shell_interface, 1);
+  else if (strcmp (interface, "wl_seat") == 0)
+    {
+      struct wl_seat *wl_seat;
+
+      wl_seat = wl_registry_bind (registry, id, &wl_seat_interface, 1);
+      backend->_priv->seat = mech_seat_wayland_new (wl_seat);
+    }
   else if (strcmp (interface, "wl_output") == 0)
     {
       struct wl_output *wl_output;
@@ -138,6 +150,7 @@ _mech_backend_wayland_init (MechBackendWayland *backend)
     }
 
   priv->event_source = _mech_event_source_wayland_new (backend);
+  priv->windows = g_hash_table_new (NULL, NULL);
   priv->outputs = g_hash_table_new (NULL, NULL);
 
   backend->wl_registry =
@@ -167,6 +180,13 @@ _mech_backend_wayland_get (void)
     }
 
   return backend;
+}
+
+MechWindow *
+_mech_backend_wayland_lookup_window (MechBackendWayland *backend,
+                                     struct wl_surface  *wl_surface)
+{
+  return g_hash_table_lookup (backend->_priv->windows, wl_surface);
 }
 
 MechMonitor *
