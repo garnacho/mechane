@@ -62,6 +62,9 @@ void             _mech_surface_get_size         (MechSurface       *surface,
 
 cairo_t        * _mech_surface_cairo_create     (MechSurface       *surface);
 
+void             _mech_surface_set_source       (cairo_t           *cr,
+                                                 MechSurface       *surface);
+
 void             _mech_surface_damage           (MechSurface       *surface,
                                                  cairo_rectangle_t *rect);
 cairo_region_t * _mech_surface_apply_clip       (MechSurface       *surface,

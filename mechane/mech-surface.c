@@ -513,6 +513,29 @@ _mech_surface_cairo_create (MechSurface *surface)
   return cr;
 }
 
+void
+_mech_surface_set_source (cairo_t     *cr,
+                          MechSurface *surface)
+{
+  cairo_surface_t *cairo_surface;
+  cairo_pattern_t *pattern;
+  MechSurfacePrivate *priv;
+  cairo_matrix_t matrix;
+
+  priv = mech_surface_get_instance_private (surface);
+  cairo_surface = MECH_SURFACE_GET_CLASS (surface)->get_surface (surface);
+  g_assert (cairo_surface != NULL);
+
+  cairo_set_source_surface (cr, cairo_surface, 0, 0);
+  pattern = cairo_get_source (cr);
+  cairo_pattern_get_matrix (pattern, &matrix);
+
+  cairo_matrix_scale (&matrix, priv->scale_x, priv->scale_y);
+  cairo_matrix_translate (&matrix, -priv->cached_rect.x,
+                          -priv->cached_rect.y);
+  cairo_pattern_set_matrix (pattern, &matrix);
+}
+
 MechSurface *
 _mech_surface_new (MechArea *area)
 {
