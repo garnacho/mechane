@@ -121,6 +121,8 @@ union _MechEvent
 GType       mech_event_get_type            (void) G_GNUC_CONST;
 
 MechEvent * mech_event_new                 (MechEventType   type);
+MechEvent * mech_event_translate           (MechEvent      *event,
+                                            MechArea       *area);
 MechEvent * mech_event_copy                (MechEvent      *event);
 
 void        mech_event_free                (MechEvent      *event);

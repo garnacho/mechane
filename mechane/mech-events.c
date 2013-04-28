@@ -15,7 +15,9 @@
  * License along with this library. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <cairo/cairo.h>
 #include <mechane/mech-events.h>
+#include <mechane/mech-area-private.h>
 #include <mechane/mechane.h>
 
 #define IS_CROSSING_ENTER(t) ((t) == MECH_ENTER || (t) == MECH_FOCUS_IN)
@@ -42,6 +44,43 @@ mech_event_new (MechEventType type)
   event->type = type;
 
   return event;
+}
+
+MechEvent *
+mech_event_translate (MechEvent *event,
+                      MechArea  *area)
+{
+  MechArea *base_area = NULL;
+  MechEvent *translated;
+
+  if (!event || !IS_EVENT_TYPE (event->type))
+    return NULL;
+
+  if (event->any.area)
+    base_area = event->any.area;
+  else if (area)
+    base_area = g_node_get_root (_mech_area_get_node (area))->data;
+
+  if (!base_area && !area)
+    return NULL;
+
+  translated = mech_event_new (event->type);
+  *translated = *event;
+  translated->any.area = g_object_ref (base_area);
+
+  if (translated->any.target)
+    g_object_ref (translated->any.target);
+
+  if (IS_POINTER_TYPE (translated->type) &&
+      base_area && base_area != area)
+    mech_area_transform_point (base_area, area,
+                               &translated->pointer.x,
+                               &translated->pointer.y);
+  else if (IS_CROSSING_TYPE (translated->type) &&
+           translated->crossing.other_area)
+    g_object_ref (translated->crossing.other_area);
+
+  return translated;
 }
 
 MechEvent *
