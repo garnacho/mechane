@@ -20,6 +20,7 @@
 
 typedef struct _MechWindow MechWindow;
 
+#include <mechane/mech-monitor.h>
 #include <mechane/mech-area.h>
 #include <mechane/mech-events.h>
 
@@ -71,6 +72,7 @@ void              mech_window_set_title     (MechWindow      *window,
                                              const gchar     *title);
 const gchar     * mech_window_get_title     (MechWindow      *window);
 
+MechMonitor     * mech_window_get_monitor   (MechWindow      *window);
 
 G_END_DECLS
 

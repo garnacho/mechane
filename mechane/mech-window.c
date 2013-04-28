@@ -30,6 +30,7 @@ typedef struct _MechWindowPrivate MechWindowPrivate;
 struct _MechWindowPrivate
 {
   MechStage *stage;
+  MechMonitor *monitor;
   MechClock *clock;
 
   gchar *title;
@@ -49,7 +50,8 @@ enum {
 enum {
   PROP_TITLE = 1,
   PROP_RESIZABLE,
-  PROP_VISIBLE
+  PROP_VISIBLE,
+  PROP_MONITOR
 };
 
 static guint signals[LAST_SIGNAL] = { 0 };
@@ -77,6 +79,9 @@ mech_window_get_property (GObject    *object,
       break;
     case PROP_VISIBLE:
       g_value_set_boolean (value, priv->visible);
+      break;
+    case PROP_MONITOR:
+      g_value_set_object (value, priv->monitor);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, param_id, pspec);
@@ -162,6 +167,14 @@ mech_window_class_init (MechWindowClass *klass)
                                                          FALSE,
                                                          G_PARAM_READWRITE |
                                                          G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (object_class,
+                                   PROP_MONITOR,
+                                   g_param_spec_object ("monitor",
+                                                        "Monitor",
+                                                        "Monitor displaying the window",
+                                                        MECH_TYPE_MONITOR,
+                                                        G_PARAM_READABLE |
+                                                        G_PARAM_STATIC_STRINGS));
 }
 
 static void
@@ -272,6 +285,27 @@ mech_window_get_size (MechWindow *window,
   priv = mech_window_get_instance_private (window);
 
   _mech_stage_get_size (priv->stage, width, height);
+}
+
+void
+_mech_window_set_monitor (MechWindow  *window,
+                          MechMonitor *monitor)
+{
+  MechWindowPrivate *priv;
+
+  priv = mech_window_get_instance_private (window);
+  priv->monitor = monitor;
+}
+
+MechMonitor *
+mech_window_get_monitor (MechWindow *window)
+{
+  MechWindowPrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_WINDOW (window), NULL);
+
+  priv = mech_window_get_instance_private (window);
+  return priv->monitor;
 }
 
 void

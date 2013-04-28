@@ -28,6 +28,8 @@ void         _mech_window_set_clock          (MechWindow  *window,
 					      MechClock   *clock);
 MechClock  * _mech_window_get_clock          (MechWindow  *window);
 MechStage  * _mech_window_get_stage          (MechWindow  *window);
+void         _mech_window_set_monitor        (MechWindow  *window,
+                                              MechMonitor *monitor);
 
 G_END_DECLS
 
