@@ -73,6 +73,12 @@ typedef enum {
   MECH_AXIS_Y
 } MechAxis;
 
+typedef enum {
+  MECH_WINDOW_STATE_NORMAL,
+  MECH_WINDOW_STATE_FULLSCREEN,
+  MECH_WINDOW_STATE_MAXIMIZED
+} MechWindowState;
+
 G_END_DECLS
 
 #endif /* __MECH_ENUMS_H__ */

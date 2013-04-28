@@ -52,6 +52,9 @@ struct _MechWindowClass
   gboolean (* resize)        (MechWindow        *window,
                               MechEvent         *event,
                               MechSideFlags      side);
+  void     (* apply_state)   (MechWindow        *window,
+                              MechWindowState    state,
+                              MechMonitor       *monitor);
   void     (* set_title)     (MechWindow        *window,
                               const gchar       *title);
   void     (* set_visible)   (MechWindow        *window,
@@ -78,6 +81,12 @@ gboolean          mech_window_get_resizable (MechWindow      *window);
 void              mech_window_set_visible   (MechWindow      *window,
                                              gboolean         visible);
 gboolean          mech_window_get_visible   (MechWindow      *window);
+
+void              mech_window_push_state    (MechWindow      *window,
+                                             MechWindowState  state,
+                                             MechMonitor     *monitor);
+void              mech_window_pop_state     (MechWindow      *window);
+MechWindowState   mech_window_get_state     (MechWindow      *window);
 
 void              mech_window_set_title     (MechWindow      *window,
                                              const gchar     *title);

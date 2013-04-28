@@ -19,6 +19,7 @@
 #include <mechane/mech-stage-private.h>
 #include <mechane/mech-area-private.h>
 #include <mechane/mech-window-private.h>
+#include <mechane/mechane.h>
 
 enum {
   CROSSING_ENTER = 1 << 1,
@@ -29,6 +30,7 @@ typedef struct _MechWindowPrivate MechWindowPrivate;
 typedef struct _MechTouchInfo MechTouchInfo;
 typedef struct _MechPointerInfo MechPointerInfo;
 typedef struct _MechKeyboardInfo MechKeyboardInfo;
+typedef struct _MechStateData MechStateData;
 
 struct _MechTouchInfo
 {
@@ -46,6 +48,14 @@ struct _MechKeyboardInfo
   GPtrArray *focus_areas;
 };
 
+struct _MechStateData
+{
+  MechMonitor *monitor;
+  guint state;
+  gint previous_width;
+  gint previous_height;
+};
+
 struct _MechWindowPrivate
 {
   MechStage *stage;
@@ -56,6 +66,7 @@ struct _MechWindowPrivate
   MechKeyboardInfo keyboard_info;
   GHashTable *touch_info;
 
+  GArray *state;
   gchar *title;
 
   gint width;
@@ -74,7 +85,8 @@ enum {
   PROP_TITLE = 1,
   PROP_RESIZABLE,
   PROP_VISIBLE,
-  PROP_MONITOR
+  PROP_MONITOR,
+  PROP_STATE
 };
 
 static guint signals[LAST_SIGNAL] = { 0 };
@@ -105,6 +117,9 @@ mech_window_get_property (GObject    *object,
       break;
     case PROP_MONITOR:
       g_value_set_object (value, priv->monitor);
+      break;
+    case PROP_STATE:
+      g_value_set_enum (value, mech_window_get_state (window));
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, param_id, pspec);
@@ -153,6 +168,8 @@ mech_window_finalize (GObject *object)
     g_ptr_array_unref (priv->keyboard_info.focus_areas);
   if (priv->touch_info)
     g_hash_table_unref (priv->touch_info);
+  if (priv->state)
+    g_array_unref (priv->state);
 
   g_object_unref (priv->stage);
 
@@ -340,6 +357,15 @@ mech_window_class_init (MechWindowClass *klass)
                                                         MECH_TYPE_MONITOR,
                                                         G_PARAM_READABLE |
                                                         G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (object_class,
+                                   PROP_STATE,
+                                   g_param_spec_enum ("state",
+                                                      "State",
+                                                      "Window state",
+                                                      MECH_TYPE_WINDOW_STATE,
+                                                      MECH_WINDOW_STATE_NORMAL,
+                                                      G_PARAM_READWRITE |
+                                                      G_PARAM_STATIC_STRINGS));
 }
 
 static void
@@ -418,6 +444,83 @@ mech_window_get_visible (MechWindow *window)
 
   priv = mech_window_get_instance_private (window);
   return priv->visible;
+}
+
+void
+mech_window_push_state (MechWindow      *window,
+                        MechWindowState  state,
+                        MechMonitor     *monitor)
+{
+  MechWindowPrivate *priv;
+  MechStateData data;
+
+  g_return_if_fail (MECH_IS_WINDOW (window));
+  g_return_if_fail (!monitor || MECH_IS_MONITOR (monitor));
+
+  priv = mech_window_get_instance_private (window);
+
+  if (!priv->state)
+    priv->state = g_array_new (FALSE, FALSE, sizeof (MechStateData));
+
+  data.state = state;
+  data.monitor = monitor;
+  mech_window_get_size (window, &data.previous_width, &data.previous_height);
+  g_array_append_val (priv->state, data);
+
+  MECH_WINDOW_GET_CLASS (window)->apply_state (window, state, monitor);
+}
+
+void
+mech_window_pop_state (MechWindow *window)
+{
+  MechWindowState state = MECH_WINDOW_STATE_NORMAL;
+  gint previous_width, previous_height;
+  MechMonitor *monitor = NULL;
+  MechWindowPrivate *priv;
+  MechStateData *data;
+
+  g_return_if_fail (MECH_IS_WINDOW (window));
+
+  priv = mech_window_get_instance_private (window);
+
+  if (!priv->state || priv->state->len == 0)
+    return;
+
+  data = &g_array_index (priv->state, MechStateData,
+                         priv->state->len - 1);
+  previous_width = data->previous_width;
+  previous_height = data->previous_height;
+
+  g_array_remove_index (priv->state, priv->state->len - 1);
+
+  if (priv->state->len != 0)
+    {
+      data = &g_array_index (priv->state, MechStateData,
+                             priv->state->len - 1);
+      state = data->state;
+      monitor = data->monitor;
+    }
+
+  MECH_WINDOW_GET_CLASS (window)->apply_state (window, state, monitor);
+
+  if (state == MECH_WINDOW_STATE_NORMAL)
+    mech_window_set_size (window, previous_width, previous_height);
+}
+
+MechWindowState
+mech_window_get_state (MechWindow *window)
+{
+  MechWindowPrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_WINDOW (window), MECH_WINDOW_STATE_NORMAL);
+
+  priv = mech_window_get_instance_private (window);
+
+  if (!priv->state || priv->state->len == 0)
+    return MECH_WINDOW_STATE_NORMAL;
+
+  return g_array_index (priv->state, MechStateData,
+                        priv->state->len - 1).state;
 }
 
 void
