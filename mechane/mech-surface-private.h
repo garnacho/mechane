@@ -51,6 +51,8 @@ struct _MechSurfaceClass
 
 GType            mech_surface_get_type          (void) G_GNUC_CONST;
 
+MechSurface    * _mech_surface_new              (MechArea          *area);
+
 void             _mech_surface_set_size         (MechSurface       *surface,
                                                  gint               width,
                                                  gint               height);

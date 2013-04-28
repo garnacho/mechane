@@ -16,6 +16,7 @@
  */
 
 #include <math.h>
+#include "mech-backend-private.h"
 #include "mech-surface-private.h"
 #include "mech-area-private.h"
 
@@ -138,4 +139,17 @@ _mech_surface_cairo_create (MechSurface *surface)
   cr = cairo_create (cairo_surface);
 
   return cr;
+}
+
+MechSurface *
+_mech_surface_new (MechArea *area)
+{
+  MechSurface *surface;
+  MechBackend *backend;
+
+  backend = mech_backend_get ();
+  surface = mech_backend_create_surface (backend);
+  g_object_set (surface, "area", area, NULL);
+
+  return surface;
 }
