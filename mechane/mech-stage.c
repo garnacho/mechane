@@ -20,6 +20,7 @@
 #include <mechane/mech-stage-private.h>
 #include <mechane/mech-area-private.h>
 #include <mechane/mech-marshal.h>
+#include <mechane/mech-surface-private.h>
 #include <mechane/mech-enums.h>
 #include <mechane/mech-events.h>
 
@@ -29,6 +30,7 @@
 typedef struct _MechStagePrivate MechStagePrivate;
 typedef struct _ZCacheNode ZCacheNode;
 typedef struct _StageNode StageNode;
+typedef struct _OffscreenNode OffscreenNode;
 typedef struct _TraverseStageContext TraverseStageContext;
 typedef struct _PickStageContext PickStageContext;
 
@@ -62,6 +64,12 @@ struct _StageNode
   GArray *z_cache;
 };
 
+struct _OffscreenNode
+{
+  GNode node;  /* data is MechSurface */
+  MechArea *area;
+};
+
 struct _TraverseStageContext
 {
   EnterNodeFunc enter;
@@ -82,6 +90,7 @@ struct _PickStageContext
 struct _MechStagePrivate
 {
   StageNode *areas;
+  OffscreenNode *offscreens;
 
   gint width;
   gint height;
@@ -108,6 +117,95 @@ _stage_node_insert (StageNode *parent,
   return (StageNode *) g_node_insert_after ((GNode *) parent,
                                             (GNode *) after,
                                             (GNode *) node);
+}
+
+/* Rendering */
+static OffscreenNode *
+_area_peek_offscreen (MechArea *area)
+{
+  return g_object_get_qdata ((GObject *) area, quark_area_offscreen);
+}
+
+static OffscreenNode *
+_mech_stage_find_container_offscreen (MechStage *stage,
+                                      MechArea  *area,
+                                      gboolean   start_from_parent)
+{
+  MechStagePrivate *priv = mech_stage_get_instance_private (stage);
+  GNode *area_node;
+
+  area_node = _mech_area_get_node (area);
+
+  if (start_from_parent)
+    area_node = area_node->parent;
+
+  while (area_node)
+    {
+      OffscreenNode *offscreen;
+
+      offscreen = _area_peek_offscreen (area_node->data);
+
+      if (offscreen)
+        return offscreen;
+
+      area_node = area_node->parent;
+    }
+
+  return priv->offscreens;
+}
+
+static OffscreenNode *
+_mech_stage_create_offscreen_node (MechStage *stage,
+                                   MechArea  *area)
+{
+  OffscreenNode *parent, *node;
+  GNode *child;
+
+  parent = _mech_stage_find_container_offscreen (stage, area, TRUE);
+
+  node = g_new0 (OffscreenNode, 1);
+  node->node.data = _mech_surface_new (area);
+  node->area = area;
+
+  /* Set all older child nodes below this new node */
+  for (child = parent->node.children; child; child = child->next)
+    {
+      OffscreenNode *child_offscreen = (OffscreenNode *) child;
+
+      if (mech_area_is_ancestor (child_offscreen->area, area))
+        {
+          g_node_unlink (child);
+          g_node_append ((GNode *) node, child);
+        }
+    }
+
+  g_node_append ((GNode *) parent, (GNode *) node);
+
+  return node;
+}
+
+static void
+_mech_stage_destroy_offscreen_node (OffscreenNode *offscreen,
+                                    gboolean       recurse)
+{
+  GNode *child;
+
+  if (!recurse && offscreen->node.parent)
+    {
+      for (child = offscreen->node.children; child; child = child->next)
+        {
+          g_node_unlink (child);
+          g_node_append (offscreen->node.parent, child);
+        }
+    }
+  else if (recurse)
+    {
+      for (child = offscreen->node.children; child; child = child->next)
+        _mech_stage_destroy_offscreen_node ((OffscreenNode *) child, recurse);
+    }
+
+  g_object_unref (offscreen->node.data);
+  g_node_unlink ((GNode *) offscreen);
 }
 
 /* Picking */
@@ -170,9 +268,39 @@ pick_stage_context_finish (PickStageContext *context)
 }
 
 /* MechStage */
+static gboolean
+_stage_dispose_offscreens (GNode    *node,
+                           gpointer  user_data)
+{
+  g_object_unref (node->data);
+  return FALSE;
+}
+
+static void
+mech_stage_finalize (GObject *object)
+{
+  MechStagePrivate *priv;
+
+  priv = mech_stage_get_instance_private ((MechStage *) object);
+
+  if (priv->offscreens)
+    {
+      g_node_traverse ((GNode *) priv->offscreens, G_POST_ORDER,
+                       G_TRAVERSE_ALL, -1, _stage_dispose_offscreens,
+                       object);
+      g_node_destroy ((GNode *) priv->offscreens);
+    }
+
+  G_OBJECT_CLASS (mech_stage_parent_class)->finalize (object);
+}
+
 static void
 mech_stage_class_init (MechStageClass *klass)
 {
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+
+  object_class->finalize = mech_stage_finalize;
+
   quark_area_offscreen = g_quark_from_static_string ("mech-stage-offscreen");
 }
 
@@ -374,6 +502,7 @@ _mech_stage_add (GNode *parent_node,
 gboolean
 _mech_stage_remove (GNode *child_node)
 {
+  OffscreenNode *offscreen;
   ZCacheNode *cache;
   StageNode *parent;
   gint i, depth;
@@ -383,6 +512,10 @@ _mech_stage_remove (GNode *child_node)
 
   parent = (StageNode *) child_node->parent;
   depth = mech_area_get_depth (child_node->data);
+  offscreen = _area_peek_offscreen (child_node->data);
+
+  if (offscreen)
+    _mech_stage_destroy_offscreen_node (offscreen, TRUE);
 
   for (i = 0; i < parent->z_cache->len; i++)
     {
@@ -435,6 +568,9 @@ _mech_stage_set_size (MechStage *stage,
 
   priv->width = MAX (1, rect.width);
   priv->height = MAX (1, rect.height);
+  _mech_surface_set_size (priv->offscreens->node.data,
+                          priv->width,
+                          priv->height);
 
   *width = priv->width;
   *height = priv->height;
@@ -491,6 +627,21 @@ _mech_stage_set_root (MechStage *stage,
 
   g_assert (!priv->areas);
   priv->areas = (StageNode *) _mech_area_get_node (area);
+}
+
+void
+_mech_stage_set_root_surface (MechStage   *stage,
+                              MechSurface *surface)
+{
+  MechStagePrivate *priv = mech_stage_get_instance_private (stage);
+  OffscreenNode *offscreen;
+
+  g_assert (!priv->offscreens);
+
+  offscreen = g_new0 (OffscreenNode, 1);
+  offscreen->node.data = surface;
+  offscreen->area = priv->areas->node.data;
+  priv->offscreens = offscreen;
 }
 
 void

@@ -18,6 +18,7 @@
 #ifndef __MECH_STAGE_H__
 #define __MECH_STAGE_H__
 
+#include <mechane/mech-surface-private.h>
 #include <mechane/mech-area.h>
 
 G_BEGIN_DECLS
@@ -55,6 +56,8 @@ void        _mech_stage_node_free           (GNode           *node);
 
 void        _mech_stage_set_root            (MechStage       *stage,
                                              MechArea        *area);
+void        _mech_stage_set_root_surface    (MechStage       *stage,
+                                             MechSurface     *surface);
 
 gboolean    _mech_stage_add                 (GNode           *parent_node,
                                              GNode           *child_node);
