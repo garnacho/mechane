@@ -252,6 +252,67 @@ mech_window_wayland_set_title (MechWindow  *window,
   wl_shell_surface_set_title (priv->wl_shell_surface, title);
 }
 
+static gboolean
+mech_window_wayland_move (MechWindow *window,
+                          MechEvent  *event)
+{
+  MechWindowWaylandPriv *priv = ((MechWindowWayland *) window)->_priv;
+  struct wl_seat *wl_seat;
+
+  if (event->any.serial == 0)
+    {
+      g_warning ("Window '%s' not moved. The event doesn't have a valid serial",
+                 mech_window_get_title (window));
+      return FALSE;
+    }
+
+  g_object_get ((GObject *) event->any.seat, "wl-seat", &wl_seat, NULL);
+  wl_shell_surface_move (priv->wl_shell_surface, wl_seat, event->any.serial);
+
+  return TRUE;
+}
+
+static gboolean
+mech_window_wayland_resize (MechWindow    *window,
+                            MechEvent     *event,
+                            MechSideFlags  side)
+{
+  MechWindowWaylandPriv *priv = ((MechWindowWayland *) window)->_priv;
+  struct wl_seat *wl_seat;
+  guint resize_mode;
+
+  if (event->any.serial == 0)
+    {
+      g_warning ("Window '%s' not resized. The event doesn't have a valid serial",
+                 mech_window_get_title (window));
+      return FALSE;
+    }
+
+  if (side == MECH_SIDE_FLAG_LEFT)
+    resize_mode = WL_SHELL_SURFACE_RESIZE_LEFT;
+  else if (side == MECH_SIDE_FLAG_RIGHT)
+    resize_mode = WL_SHELL_SURFACE_RESIZE_RIGHT;
+  else if (side == MECH_SIDE_FLAG_TOP)
+    resize_mode = WL_SHELL_SURFACE_RESIZE_TOP;
+  else if (side == MECH_SIDE_FLAG_BOTTOM)
+    resize_mode = WL_SHELL_SURFACE_RESIZE_BOTTOM;
+  else if (side == MECH_SIDE_FLAG_CORNER_TOP_LEFT)
+    resize_mode = WL_SHELL_SURFACE_RESIZE_TOP_LEFT;
+  else if (side == MECH_SIDE_FLAG_CORNER_TOP_RIGHT)
+    resize_mode = WL_SHELL_SURFACE_RESIZE_TOP_RIGHT;
+  else if (side == MECH_SIDE_FLAG_CORNER_BOTTOM_LEFT)
+    resize_mode = WL_SHELL_SURFACE_RESIZE_BOTTOM_LEFT;
+  else if (side == MECH_SIDE_FLAG_CORNER_BOTTOM_RIGHT)
+    resize_mode = WL_SHELL_SURFACE_RESIZE_BOTTOM_RIGHT;
+  else
+    return FALSE;
+
+  g_object_get ((GObject *) event->any.seat, "wl-seat", &wl_seat, NULL);
+  wl_shell_surface_resize (priv->wl_shell_surface, wl_seat,
+                           event->any.serial, resize_mode);
+  return TRUE;
+}
+
 static void
 mech_window_wayland_class_init (MechWindowWaylandClass *klass)
 {
@@ -265,6 +326,8 @@ mech_window_wayland_class_init (MechWindowWaylandClass *klass)
 
   window_class->set_visible = mech_window_wayland_set_visible;
   window_class->set_title = mech_window_wayland_set_title;
+  window_class->move = mech_window_wayland_move;
+  window_class->resize = mech_window_wayland_resize;
 
   g_object_class_install_property (object_class,
                                    PROP_WL_COMPOSITOR,
