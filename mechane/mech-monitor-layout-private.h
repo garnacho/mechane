@@ -15,22 +15,22 @@
  * License along with this library. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __MECHANE_H__
-#define __MECHANE_H__
+#ifndef __MECH_MONITOR_LAYOUT_PRIVATE_H__
+#define __MECH_MONITOR_LAYOUT_PRIVATE_H__
 
-#include <glib-object.h>
+#include <mechane/mech-monitor-layout.h>
+#include <mechane/mech-monitor.h>
 
 G_BEGIN_DECLS
 
-/* Base */
-#include <mechane/mech-enum-types.h>
-#include <mechane/mech-enums.h>
-#include <mechane/mech-events.h>
-#include <mechane/mech-monitor.h>
-#include <mechane/mech-monitor-layout.h>
-#include <mechane/mech-area.h>
-#include <mechane/mech-window.h>
-
+void        _mech_monitor_layout_add      (MechMonitorLayout *layout,
+                                           MechMonitor       *monitor);
+void        _mech_monitor_layout_remove   (MechMonitorLayout *layout,
+                                           MechMonitor       *monitor);
+void        _mech_monitor_layout_relocate (MechMonitorLayout *layout,
+                                           MechMonitor       *monitor,
+                                           gint               x,
+                                           gint               y);
 G_END_DECLS
 
-#endif /* __MECHANE_H__ */
+#endif /* __MECH_MONITOR_LAYOUT_PRIVATE_H__ */

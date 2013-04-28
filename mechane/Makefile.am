@@ -13,6 +13,7 @@ mech_sources = 			\
 	mech-clock.c		\
 	mech-events.c		\
 	mech-monitor.c		\
+	mech-monitor-layout.c	\
 	mech-stage.c		\
 	mech-surface.c		\
 	mech-types.c		\
