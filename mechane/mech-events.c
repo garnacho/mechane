@@ -108,6 +108,26 @@ mech_event_set_area (MechEvent *event,
   event->any.area = area;
 }
 
+MechSeat *
+mech_event_get_seat (MechEvent *event)
+{
+  g_return_val_if_fail (event != NULL, NULL);
+  g_return_val_if_fail (IS_EVENT_TYPE (event->type), NULL);
+
+  return event->any.seat;
+}
+
+void
+mech_event_set_seat (MechEvent *event,
+                     MechSeat  *seat)
+{
+  g_return_if_fail (event != NULL);
+  g_return_if_fail (IS_EVENT_TYPE (event->type));
+  g_return_if_fail (MECH_IS_SEAT (seat));
+
+  event->any.seat = seat;
+}
+
 gboolean
 mech_event_has_flags (MechEvent *event,
                       guint      flags)

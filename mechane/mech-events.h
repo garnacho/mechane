@@ -20,7 +20,7 @@
 #ifndef __MECH_EVENTS_H__
 #define __MECH_EVENTS_H__
 
-#include <glib-object.h>
+#include <mechane/mech-seat.h>
 
 G_BEGIN_DECLS
 
@@ -58,6 +58,7 @@ struct _MechEventAny
   guint32 serial;
   MechArea *area;
   MechArea *target;
+  MechSeat *seat;
   guint32 evtime;
   guint16 flags;
 };
@@ -128,6 +129,9 @@ MechArea  * mech_event_get_area            (MechEvent      *event);
 void        mech_event_set_area            (MechEvent      *event,
                                             MechArea       *area);
 
+MechSeat  * mech_event_get_seat            (MechEvent      *event);
+void        mech_event_set_seat            (MechEvent      *event,
+                                            MechSeat       *seat);
 gboolean    mech_event_has_flags           (MechEvent      *input,
                                             guint           flags);
 
