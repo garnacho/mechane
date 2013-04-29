@@ -1298,6 +1298,7 @@ mech_area_set_parent (MechArea *area,
   if (parent)
     {
       _mech_stage_add (_mech_area_get_node (parent), priv->node);
+      mech_area_check_size (area);
     }
   else
     {
@@ -1422,6 +1423,65 @@ mech_area_set_depth (MechArea *area,
 
   if (stage)
     _mech_stage_notify_depth_change (stage, area);
+}
+
+static gboolean
+_mech_area_child_resize (MechArea *area,
+                         MechArea *child)
+{
+  MechAreaClass *area_class;
+
+  area_class = MECH_AREA_GET_CLASS (area);
+
+  if (!area_class->child_resize)
+    return TRUE;
+
+  return area_class->child_resize (area, child);
+}
+
+void
+mech_area_check_size (MechArea *area)
+{
+  MechAreaPrivate *priv, *parent_priv;
+  MechArea *parent, *cur;
+  cairo_rectangle_t rect;
+  gdouble extent;
+
+  g_return_if_fail (MECH_IS_AREA (area));
+
+  cur = area;
+
+  while (_mech_area_get_node (cur)->parent)
+    {
+      priv = mech_area_get_instance_private (cur);
+      parent = priv->node->parent->data;
+      parent_priv = mech_area_get_instance_private (parent);
+
+      priv->need_width_request = priv->need_height_request = TRUE;
+      priv->need_allocate_size = TRUE;
+
+      if (parent_priv->need_allocate_size)
+        return;
+
+      if (!_mech_area_child_resize (parent, cur))
+        break;
+
+      cur = parent;
+    }
+
+  priv = mech_area_get_instance_private (cur);
+  priv->need_allocate_size = TRUE;
+
+  _mech_area_get_stage_rect (cur, &rect);
+
+  /* FIXME: there's better ways to do this for sure */
+  extent = mech_area_get_extent (cur, MECH_AXIS_X);
+  rect.width = MAX (rect.width, extent);
+
+  extent = mech_area_get_second_extent (cur, MECH_AXIS_Y, extent);
+  rect.height = MAX (rect.height, extent);
+
+  _mech_area_allocate_stage_rect (cur, &rect);
 }
 
 void

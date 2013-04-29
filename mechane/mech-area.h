@@ -121,6 +121,8 @@ MechEventMask    mech_area_get_events           (MechArea        *area);
 gboolean         mech_area_handles_event        (MechArea        *area,
                                                  MechEventType    event_type);
 
+void             mech_area_check_size           (MechArea          *area);
+
 void             mech_area_allocate_size        (MechArea          *area,
 						 cairo_rectangle_t *size);
 void             mech_area_get_allocated_size   (MechArea          *area,
