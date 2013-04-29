@@ -1020,6 +1020,7 @@ _mech_window_process_updates (MechWindow *window)
     }
 
   g_signal_emit (window, signals[DRAW], 0, cr);
+  MECH_WINDOW_GET_CLASS (window)->push_update (window, NULL);
 
   if (cairo_status (cr) != CAIRO_STATUS_SUCCESS)
     g_warning ("Cairo context got error '%s'",

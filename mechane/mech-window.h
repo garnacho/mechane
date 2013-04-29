@@ -48,6 +48,8 @@ struct _MechWindowClass
                               cairo_t           *cr);
   gboolean (* handle_event)  (MechWindow        *window,
                               MechEvent         *event);
+  void     (* push_update)   (MechWindow        *window,
+                              cairo_region_t    *region);
 
   gboolean (* move)          (MechWindow        *window,
                               MechEvent         *event);

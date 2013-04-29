@@ -235,12 +235,38 @@ mech_window_wayland_set_visible (MechWindow *window,
       if (!priv->surface)
         priv->surface = _mech_surface_wayland_new (MECH_BACKING_SURFACE_TYPE_SHM,
                                                    priv->wl_surface);
+      _mech_window_set_surface (window, priv->surface);
     }
   else
     {
       wl_surface_attach (priv->wl_surface, NULL, 0 , 0);
       wl_surface_commit (priv->wl_surface);
     }
+}
+
+static void
+mech_window_wayland_push_update (MechWindow     *window,
+                                 cairo_region_t *region)
+{
+  MechWindowWaylandPriv *priv = ((MechWindowWayland *) window)->_priv;
+
+  if (!region)
+    {
+      cairo_rectangle_int_t rect = { 0 };
+
+      mech_window_get_size (window, &rect.width, &rect.height);
+      region = cairo_region_create_rectangle (&rect);
+    }
+  else
+    cairo_region_reference (region);
+
+  _mech_surface_wayland_damage ((MechSurfaceWayland *) priv->surface,
+                                region);
+
+  if (_mech_surface_wayland_attach ((MechSurfaceWayland *) priv->surface))
+    wl_surface_commit (priv->wl_surface);
+
+  cairo_region_destroy (region);
 }
 
 static void
@@ -352,6 +378,7 @@ mech_window_wayland_class_init (MechWindowWaylandClass *klass)
   object_class->finalize = mech_window_wayland_finalize;
 
   window_class->set_visible = mech_window_wayland_set_visible;
+  window_class->push_update = mech_window_wayland_push_update;
   window_class->set_title = mech_window_wayland_set_title;
   window_class->move = mech_window_wayland_move;
   window_class->resize = mech_window_wayland_resize;
