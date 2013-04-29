@@ -45,6 +45,7 @@ enum {
   PROP_CLIP,
   PROP_VISIBLE,
   PROP_DEPTH,
+  PROP_NAME,
   PROP_MATRIX
 };
 
@@ -68,6 +69,7 @@ struct _MechAreaPrivate
   MechArea *parent;
   GPtrArray *children;
   cairo_matrix_t matrix;
+  GQuark name;
 
   /* In stage coordinates, not affected by matrix. */
   cairo_rectangle_t rect;
@@ -132,6 +134,9 @@ mech_area_set_property (GObject      *object,
     case PROP_DEPTH:
       mech_area_set_depth (area, g_value_get_int (value));
       break;
+    case PROP_NAME:
+      mech_area_set_name (area, g_value_get_string (value));
+      break;
     case PROP_MATRIX:
       mech_area_set_matrix (area, g_value_get_boxed (value));
       break;
@@ -164,6 +169,9 @@ mech_area_get_property (GObject    *object,
       break;
     case PROP_DEPTH:
       g_value_set_int (value, priv->depth);
+      break;
+    case PROP_NAME:
+      g_value_set_string (value, g_quark_to_string (priv->name));
       break;
     case PROP_MATRIX:
       g_value_set_boxed (value, &priv->matrix);
@@ -347,6 +355,14 @@ mech_area_class_init (MechAreaClass *klass)
                                                      G_MININT, G_MAXINT, 0,
                                                      G_PARAM_READWRITE |
                                                      G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (object_class,
+                                   PROP_NAME,
+                                   g_param_spec_string ("name",
+                                                        "Name",
+                                                        "Area name",
+                                                        NULL,
+                                                        G_PARAM_READWRITE |
+                                                        G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (object_class,
                                    PROP_MATRIX,
                                    g_param_spec_boxed ("matrix",
@@ -1396,6 +1412,40 @@ mech_area_set_depth (MechArea *area,
 
   if (stage)
     _mech_stage_notify_depth_change (stage, area);
+}
+
+void
+mech_area_set_name (MechArea *area,
+		    const gchar *name)
+{
+  MechAreaPrivate *priv;
+
+  g_return_if_fail (MECH_IS_AREA (area));
+
+  priv = mech_area_get_instance_private (area);
+  priv->name = (name) ? g_quark_from_string (name) : 0;
+}
+
+const gchar *
+mech_area_get_name (MechArea *area)
+{
+  MechAreaPrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_AREA (area), NULL);
+
+  priv = mech_area_get_instance_private (area);
+  return g_quark_to_string (priv->name);
+}
+
+GQuark
+mech_area_get_qname (MechArea *area)
+{
+  MechAreaPrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_AREA (area), 0);
+
+  priv = mech_area_get_instance_private (area);
+  return priv->name;
 }
 
 cairo_region_t *

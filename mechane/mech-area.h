@@ -153,7 +153,12 @@ void             mech_area_set_depth            (MechArea          *area,
 void             mech_area_grab_focus           (MechArea          *area,
                                                  MechSeat          *seat);
 
-cairo_region_t  * mech_area_get_shape           (MechArea          *area);
+void             mech_area_set_name             (MechArea          *area,
+                                                 const gchar       *name);
+const gchar    * mech_area_get_name             (MechArea          *area);
+GQuark           mech_area_get_qname            (MechArea          *area);
+
+cairo_region_t * mech_area_get_shape            (MechArea          *area);
 
 G_END_DECLS
 
