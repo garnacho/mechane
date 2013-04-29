@@ -314,6 +314,33 @@ mech_window_wayland_resize (MechWindow    *window,
 }
 
 static void
+mech_window_wayland_apply_state (MechWindow      *window,
+                                 MechWindowState  state,
+                                 MechMonitor     *monitor)
+{
+  MechWindowWaylandPriv *priv = ((MechWindowWayland *) window)->_priv;
+  struct wl_output *wl_output;
+
+  if (state == MECH_WINDOW_STATE_NORMAL)
+    wl_shell_surface_set_toplevel (priv->wl_shell_surface);
+  else
+    {
+      if (!monitor)
+        monitor = mech_window_get_monitor (window);
+
+      g_object_get (monitor, "wl-output", &wl_output, NULL);
+
+      if (state == MECH_WINDOW_STATE_MAXIMIZED)
+        wl_shell_surface_set_maximized (priv->wl_shell_surface, wl_output);
+      else if (state == MECH_WINDOW_STATE_FULLSCREEN)
+        wl_shell_surface_set_fullscreen (priv->wl_shell_surface,
+                                         WL_SHELL_SURFACE_FULLSCREEN_METHOD_DEFAULT,
+                                         mech_monitor_get_frequency (monitor) * 1000,
+                                         wl_output);
+    }
+}
+
+static void
 mech_window_wayland_class_init (MechWindowWaylandClass *klass)
 {
   MechWindowClass *window_class = MECH_WINDOW_CLASS (klass);
@@ -328,6 +355,7 @@ mech_window_wayland_class_init (MechWindowWaylandClass *klass)
   window_class->set_title = mech_window_wayland_set_title;
   window_class->move = mech_window_wayland_move;
   window_class->resize = mech_window_wayland_resize;
+  window_class->apply_state = mech_window_wayland_apply_state;
 
   g_object_class_install_property (object_class,
                                    PROP_WL_COMPOSITOR,
