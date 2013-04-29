@@ -947,6 +947,8 @@ mech_area_set_matrix (MechArea             *area,
                       const cairo_matrix_t *matrix)
 {
   MechAreaPrivate *priv;
+  MechWindow *window;
+  MechStage *stage;
 
   g_return_if_fail (MECH_IS_AREA (area));
   g_return_if_fail (matrix != NULL);
@@ -956,9 +958,20 @@ mech_area_set_matrix (MechArea             *area,
   if (MATRIX_IS_EQUAL (*matrix, priv->matrix))
     return;
 
+  window = mech_area_get_window (area);
+
+  if (window)
+    {
+      stage = _mech_window_get_stage (window);
+      _mech_stage_invalidate (stage, area, NULL, TRUE);
+    }
+
   priv->matrix = *matrix;
   priv->is_identity =
     (MATRIX_IS_IDENTITY (priv->matrix) == TRUE);
+
+  if (stage)
+    _mech_stage_invalidate (stage, area, NULL, TRUE);
 }
 
 gboolean

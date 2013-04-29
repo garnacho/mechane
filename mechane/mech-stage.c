@@ -16,6 +16,7 @@
  */
 
 #include <math.h>
+#include <string.h>
 #include <cairo/cairo-gobject.h>
 
 #include <mechane/mech-stage-private.h>
@@ -856,6 +857,8 @@ _mech_stage_set_size (MechStage *stage,
   *width = priv->width;
   *height = priv->height;
 
+  _mech_stage_invalidate (stage, NULL, NULL, FALSE);
+
   return TRUE;
 }
 
@@ -934,6 +937,65 @@ _mech_stage_set_root_surface (MechStage   *stage,
   offscreen->node.data = surface;
   offscreen->area = priv->areas->node.data;
   priv->offscreens = offscreen;
+
+  _mech_stage_invalidate (stage, NULL, NULL, FALSE);
+}
+
+void
+_mech_stage_invalidate (MechStage      *stage,
+                        MechArea       *area,
+                        cairo_region_t *region,
+                        gboolean        start_from_parent)
+{
+  MechStagePrivate *priv = mech_stage_get_instance_private (stage);
+  OffscreenNode *offscreen = NULL;
+  cairo_rectangle_t rect;
+  MechPoint points[4];
+
+  if (!priv->offscreens)
+    return;
+
+  if (!area)
+    area = priv->areas->node.data;
+
+  if (!region)
+    _mech_area_get_renderable_rect (area, &rect);
+  else if (!cairo_region_is_empty (region))
+    {
+      cairo_rectangle_int_t int_rect;
+
+      cairo_region_get_extents (region, &int_rect);
+      rect.x = int_rect.x;
+      rect.y = int_rect.y;
+      rect.width = int_rect.width;
+      rect.height = int_rect.height;
+    }
+  else
+    return;
+
+  points[0].x = points[2].x = rect.x;
+  points[0].y = points[1].y = rect.y;
+  points[1].x = points[3].x = rect.x + rect.width;
+  points[2].y = points[3].y = rect.y + rect.height;
+
+  offscreen = _mech_stage_find_container_offscreen (stage, area,
+                                                    start_from_parent);
+  while (offscreen)
+    {
+      MechPoint copy[4];
+
+      memcpy (copy, points, sizeof (MechPoint) * 4);
+      mech_area_transform_points (area, offscreen->area,
+                                  (MechPoint *) &copy, 4);
+
+      rect.x = MIN4 (copy[0].x, copy[1].x, copy[2].x, copy[3].x);
+      rect.y = MIN4 (copy[0].y, copy[1].y, copy[2].y, copy[3].y);
+      rect.width = MAX4 (copy[0].x, copy[1].x, copy[2].x, copy[3].x) - rect.x;
+      rect.height = MAX4 (copy[0].y, copy[1].y, copy[2].y, copy[3].y) - rect.y;
+      _mech_surface_damage (offscreen->node.data, &rect);
+
+      offscreen = (OffscreenNode *) offscreen->node.parent;
+    }
 }
 
 void

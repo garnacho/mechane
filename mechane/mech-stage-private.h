@@ -78,6 +78,11 @@ GPtrArray * _mech_stage_pick_for_event      (MechStage       *stage,
 void        _mech_stage_notify_depth_change (MechStage       *stage,
                                              MechArea        *area);
 
+void        _mech_stage_invalidate          (MechStage       *stage,
+                                             MechArea        *area,
+                                             cairo_region_t  *region,
+                                             gboolean         start_from_parent);
+
 gboolean    _mech_stage_get_renderable_rect (MechStage         *stage,
                                              MechArea          *area,
                                              cairo_rectangle_t *rect);
