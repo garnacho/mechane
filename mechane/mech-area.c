@@ -997,7 +997,10 @@ mech_area_set_matrix (MechArea             *area,
     (MATRIX_IS_IDENTITY (priv->matrix) == TRUE);
 
   if (stage)
-    _mech_stage_invalidate (stage, area, NULL, TRUE);
+    {
+      _mech_stage_invalidate (stage, area, NULL, TRUE);
+      mech_window_queue_draw (window);
+    }
 }
 
 gboolean
@@ -1290,6 +1293,7 @@ mech_area_set_parent (MechArea *area,
 
   if (priv->node->parent)
     {
+      mech_area_redraw (area, NULL);
       _mech_stage_remove (priv->node);
     }
 
@@ -1343,6 +1347,7 @@ mech_area_set_visible (MechArea *area,
   if (parent_visible)
     {
       _mech_area_notify_visibility_change (area);
+      mech_area_redraw (area, NULL);
     }
 }
 
@@ -1482,6 +1487,25 @@ mech_area_check_size (MechArea *area)
   rect.height = MAX (rect.height, extent);
 
   _mech_area_allocate_stage_rect (cur, &rect);
+}
+
+void
+mech_area_redraw (MechArea       *area,
+                  cairo_region_t *region)
+{
+  MechWindow *window;
+  MechStage *stage;
+
+  g_return_if_fail (MECH_IS_AREA (area));
+
+  window = mech_area_get_window (area);
+
+  if (!window)
+    return;
+
+  stage = _mech_window_get_stage (window);
+  _mech_stage_invalidate (stage, area, region, FALSE);
+  mech_window_queue_draw (window);
 }
 
 void
