@@ -76,6 +76,8 @@ struct _MechAreaClass
 
 GType            mech_area_get_type             (void) G_GNUC_CONST;
 
+MechArea       * mech_area_new                  (const gchar    *name,
+                                                 MechEventMask   evmask);
 void             mech_area_add                  (MechArea       *area,
 						 MechArea       *child);
 void             mech_area_remove               (MechArea       *area,

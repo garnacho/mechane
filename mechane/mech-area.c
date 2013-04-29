@@ -656,6 +656,16 @@ mech_area_get_window (MechArea *area)
   return g_object_get_qdata (root->data, quark_window);
 }
 
+MechArea *
+mech_area_new (const gchar   *name,
+               MechEventMask  evmask)
+{
+  return g_object_new (MECH_TYPE_AREA,
+                       "name", name,
+                       "events", evmask,
+                       NULL);
+}
+
 gboolean
 mech_area_is_ancestor (MechArea *area,
                        MechArea *ancestor)
