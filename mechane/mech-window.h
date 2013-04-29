@@ -92,6 +92,7 @@ void              mech_window_set_title     (MechWindow      *window,
                                              const gchar     *title);
 const gchar     * mech_window_get_title     (MechWindow      *window);
 
+MechArea        * mech_window_get_root_area (MechWindow      *window);
 MechMonitor     * mech_window_get_monitor   (MechWindow      *window);
 
 gboolean          mech_window_move          (MechWindow      *window,

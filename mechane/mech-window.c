@@ -61,6 +61,7 @@ struct _MechWindowPrivate
   MechStage *stage;
   MechMonitor *monitor;
   MechClock *clock;
+  MechArea *frame;
 
   MechPointerInfo pointer_info;
   MechKeyboardInfo keyboard_info;
@@ -172,6 +173,7 @@ mech_window_finalize (GObject *object)
     g_array_unref (priv->state);
 
   g_object_unref (priv->stage);
+  g_object_unref (priv->frame);
 
   G_OBJECT_CLASS (mech_window_parent_class)->finalize (object);
 }
@@ -673,6 +675,9 @@ mech_window_init (MechWindow *window)
   priv = mech_window_get_instance_private (window);
   priv->resizable = TRUE;
   priv->stage = _mech_stage_new ();
+  priv->frame = mech_area_new (NULL, MECH_BUTTON_MASK | MECH_MOTION_MASK);
+
+  _mech_area_make_window_root (priv->frame, window);
 }
 
 gboolean
@@ -850,6 +855,17 @@ mech_window_get_title (MechWindow *window)
 
   priv = mech_window_get_instance_private (window);
   return priv->title;
+}
+
+MechArea *
+mech_window_get_root_area (MechWindow *window)
+{
+  MechWindowPrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_WINDOW (window), NULL);
+
+  priv = mech_window_get_instance_private (window);
+  return priv->frame;
 }
 
 void
