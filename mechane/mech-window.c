@@ -15,6 +15,8 @@
  * License along with this library. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <cairo/cairo-gobject.h>
+
 #include <mechane/mech-marshal.h>
 #include <mechane/mech-stage-private.h>
 #include <mechane/mech-area-private.h>
@@ -76,9 +78,13 @@ struct _MechWindowPrivate
 
   guint resizable        : 1;
   guint visible          : 1;
+  guint redraw_requested : 1;
+  guint resize_requested : 1;
+  guint size_initialized : 1;
 };
 
 enum {
+  DRAW,
   SIZE_CHANGED,
   LAST_SIGNAL
 };
@@ -180,6 +186,20 @@ mech_window_finalize (GObject *object)
   g_object_unref (priv->frame);
 
   G_OBJECT_CLASS (mech_window_parent_class)->finalize (object);
+}
+
+static void
+mech_window_draw (MechWindow *window,
+                  cairo_t    *cr)
+{
+  MechWindowPrivate *priv;
+
+  priv = mech_window_get_instance_private (window);
+
+  cairo_push_group (cr);
+  _mech_stage_render (priv->stage, cr);
+  cairo_pop_group_to_source (cr);
+  cairo_paint (cr);
 }
 
 static gint
@@ -617,8 +637,18 @@ mech_window_class_init (MechWindowClass *klass)
   object_class->set_property = mech_window_set_property;
   object_class->finalize = mech_window_finalize;
 
+  klass->draw = mech_window_draw;
   klass->handle_event = _mech_window_handle_event_internal;
 
+  signals[DRAW] =
+    g_signal_new ("draw",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST,
+                  G_STRUCT_OFFSET (MechWindowClass, draw),
+                  NULL, NULL,
+                  g_cclosure_marshal_VOID__BOXED,
+                  G_TYPE_NONE, 1,
+                  CAIRO_GOBJECT_TYPE_CONTEXT);
   signals[SIZE_CHANGED] =
     g_signal_new ("size-changed",
                   G_TYPE_FROM_CLASS (klass),
@@ -722,6 +752,27 @@ mech_window_get_resizable (MechWindow *window)
   return priv->resizable;
 }
 
+static void
+_mech_window_queue_resize (MechWindow *window,
+                           gint        width,
+                           gint        height)
+{
+  MechWindowPrivate *priv;
+
+  priv = mech_window_get_instance_private (window);
+
+  if (priv->resize_requested)
+    return;
+
+  priv->size_initialized = TRUE;
+  priv->resize_requested = TRUE;
+  priv->width = width;
+  priv->height = height;
+
+  if (priv->clock)
+    _mech_clock_tick (priv->clock);
+}
+
 void
 mech_window_set_visible (MechWindow *window,
                          gboolean    visible)
@@ -731,6 +782,15 @@ mech_window_set_visible (MechWindow *window,
   g_return_if_fail (MECH_IS_WINDOW (window));
 
   priv = mech_window_get_instance_private (window);
+
+  if (!priv->visible && visible &&
+      !priv->size_initialized)
+    {
+      gint width, height;
+
+      _mech_stage_get_size (priv->stage, &width, &height);
+      _mech_window_queue_resize (window, width, height);
+    }
 
   if (MECH_WINDOW_GET_CLASS (window)->set_visible)
     MECH_WINDOW_GET_CLASS (window)->set_visible (window, visible);
@@ -883,7 +943,91 @@ mech_window_get_size (MechWindow *window,
 
   priv = mech_window_get_instance_private (window);
 
-  _mech_stage_get_size (priv->stage, width, height);
+  if (priv->size_initialized)
+    {
+      if (width)
+        *width = priv->width;
+      if (height)
+        *height = priv->height;
+    }
+  else
+    _mech_stage_get_size (priv->stage, width, height);
+}
+
+void
+mech_window_set_size (MechWindow *window,
+                      gint        width,
+                      gint        height)
+{
+  gint stage_width, stage_height;
+  MechWindowPrivate *priv;
+
+  g_return_if_fail (MECH_IS_WINDOW (window));
+
+  priv = mech_window_get_instance_private (window);
+  _mech_stage_get_size (priv->stage, &stage_width, &stage_height);
+
+  width = MAX (stage_width, width);
+  height = MAX (stage_height, height);
+
+  if (priv->width != width || priv->height != height)
+    {
+      _mech_window_queue_resize (window, width, height);
+      g_signal_emit ((GObject *) window, signals[SIZE_CHANGED],
+                     0, width, height);
+    }
+}
+
+void
+mech_window_queue_draw (MechWindow *window)
+{
+  MechWindowPrivate *priv;
+
+  g_return_if_fail (MECH_IS_WINDOW (window));
+
+  priv = mech_window_get_instance_private (window);
+  priv->redraw_requested = TRUE;
+
+  if (priv->clock)
+    _mech_clock_tick (priv->clock);
+}
+
+void
+_mech_window_process_updates (MechWindow *window)
+{
+  MechWindowPrivate *priv;
+  cairo_t *cr;
+
+  priv = mech_window_get_instance_private (window);
+
+  if (!priv->visible ||
+      (!priv->resize_requested && !priv->redraw_requested))
+    return;
+
+  /* This call may modify the underlying surfaces */
+  if (priv->resize_requested)
+    _mech_stage_set_size (priv->stage, &priv->width, &priv->height);
+
+  cr = _mech_surface_cairo_create (priv->surface);
+
+  if (priv->resize_requested)
+    {
+      cairo_save (cr);
+      cairo_set_operator (cr, CAIRO_OPERATOR_SOURCE);
+      cairo_set_source_rgba (cr, 0, 0, 0, 0);
+      cairo_paint (cr);
+      cairo_restore (cr);
+    }
+
+  g_signal_emit (window, signals[DRAW], 0, cr);
+
+  if (cairo_status (cr) != CAIRO_STATUS_SUCCESS)
+    g_warning ("Cairo context got error '%s'",
+               cairo_status_to_string (cairo_status (cr)));
+
+  priv->resize_requested = FALSE;
+  priv->redraw_requested = FALSE;
+  cairo_destroy (cr);
 }
 
 void
@@ -924,6 +1068,9 @@ _mech_window_set_clock (MechWindow *window,
   if (clock)
     {
       priv->clock = g_object_ref (clock);
+
+      if (priv->resize_requested || priv->redraw_requested)
+        _mech_clock_tick (clock);
     }
 }
 
