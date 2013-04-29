@@ -18,6 +18,7 @@
 #include <cairo/cairo-gobject.h>
 
 #include <mechane/mech-marshal.h>
+#include <mechane/mech-backend-private.h>
 #include <mechane/mech-stage-private.h>
 #include <mechane/mech-area-private.h>
 #include <mechane/mech-window-private.h>
@@ -712,6 +713,17 @@ mech_window_init (MechWindow *window)
   priv->frame = mech_area_new (NULL, MECH_BUTTON_MASK | MECH_MOTION_MASK);
 
   _mech_area_make_window_root (priv->frame, window);
+}
+
+MechWindow *
+mech_window_new (void)
+{
+  MechBackend *backend;
+
+  backend = mech_backend_get ();
+  g_assert (backend != NULL);
+
+  return mech_backend_create_window (backend);
 }
 
 gboolean

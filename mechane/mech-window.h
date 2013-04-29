@@ -71,6 +71,8 @@ struct _MechWindowClass
 
 GType             mech_window_get_type      (void) G_GNUC_CONST;
 
+MechWindow      * mech_window_new           (void);
+
 gboolean          mech_window_handle_event  (MechWindow      *window,
                                              MechEvent       *event);
 
