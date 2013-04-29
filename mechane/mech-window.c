@@ -60,6 +60,7 @@ struct _MechWindowPrivate
 {
   MechStage *stage;
   MechMonitor *monitor;
+  MechSurface *surface;
   MechClock *clock;
   MechArea *frame;
 
@@ -160,6 +161,9 @@ mech_window_finalize (GObject *object)
 
   g_free (priv->title);
   g_object_unref (priv->clock);
+
+  if (priv->surface)
+    g_object_unref (priv->surface);
 
   if (priv->pointer_info.crossing_areas)
     g_ptr_array_unref (priv->pointer_info.crossing_areas);
@@ -946,6 +950,29 @@ mech_window_get_focus (MechWindow *window)
 
   return g_ptr_array_index (priv->keyboard_info.focus_areas,
                             priv->keyboard_info.focus_areas->len - 1);
+}
+
+void
+_mech_window_set_surface (MechWindow  *window,
+                          MechSurface *surface)
+{
+  MechWindowPrivate *priv;
+  gint width, height;
+
+  priv = mech_window_get_instance_private (window);
+
+  if (priv->surface)
+    {
+      g_object_unref (priv->surface);
+      priv->surface = NULL;
+    }
+
+  priv->surface = g_object_ref (surface);
+  g_object_set (surface, "area", priv->frame, NULL);
+  mech_window_get_size (window, &width, &height);
+  _mech_surface_set_size (surface, width, height);
+
+  _mech_stage_set_root_surface (priv->stage, surface);
 }
 
 MechStage *

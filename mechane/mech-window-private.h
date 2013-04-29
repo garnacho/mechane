@@ -24,6 +24,8 @@
 
 G_BEGIN_DECLS
 
+void         _mech_window_set_surface        (MechWindow  *window,
+                                              MechSurface *surface);
 void         _mech_window_grab_focus         (MechWindow  *window,
                                               MechArea    *area,
                                               MechSeat    *seat);
