@@ -29,6 +29,7 @@ G_BEGIN_DECLS
 #include <mechane/mech-events.h>
 #include <mechane/mech-monitor.h>
 #include <mechane/mech-monitor-layout.h>
+#include <mechane/mech-renderer.h>
 #include <mechane/mech-area.h>
 #include <mechane/mech-window.h>
 

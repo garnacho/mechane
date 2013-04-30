@@ -23,8 +23,10 @@
 G_BEGIN_DECLS
 
 #define MECH_TYPE_POINT (mech_point_get_type ())
+#define MECH_TYPE_BORDER (mech_border_get_type ())
 
 typedef struct _MechPoint MechPoint;
+typedef struct _MechBorder MechBorder;
 
 struct _MechPoint
 {
@@ -32,9 +34,26 @@ struct _MechPoint
   gdouble y;
 };
 
+struct _MechBorder
+{
+  gdouble left;
+  gdouble right;
+  gdouble top;
+  gdouble bottom;
+
+  guint left_unit   : 4;
+  guint right_unit  : 4;
+  guint top_unit    : 4;
+  guint bottom_unit : 4;
+};
+
 GType        mech_point_get_type    (void) G_GNUC_CONST;
 MechPoint *  mech_point_copy        (MechPoint *point);
 void         mech_point_free        (MechPoint *point);
+
+GType        mech_border_get_type   (void) G_GNUC_CONST;
+MechBorder * mech_border_copy       (MechBorder *border);
+void         mech_border_free       (MechBorder *border);
 
 G_END_DECLS
 

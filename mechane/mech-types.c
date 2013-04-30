@@ -30,3 +30,17 @@ mech_point_free (MechPoint *point)
 {
   g_slice_free (MechPoint, point);
 }
+
+G_DEFINE_BOXED_TYPE (MechBorder, mech_border, mech_border_copy, mech_border_free)
+
+MechBorder *
+mech_border_copy (MechBorder *border)
+{
+  return g_slice_dup (MechBorder, border);
+}
+
+void
+mech_border_free (MechBorder *border)
+{
+  g_slice_free (MechBorder, border);
+}
