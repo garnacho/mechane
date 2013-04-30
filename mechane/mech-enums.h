@@ -69,6 +69,15 @@ typedef enum {
 } MechEventMask;
 
 typedef enum {
+  MECH_UNIT_PX,
+  MECH_UNIT_EM,
+  MECH_UNIT_IN,
+  MECH_UNIT_MM,
+  MECH_UNIT_PT,
+  MECH_UNIT_PERCENTAGE /*< nick=% >*/
+} MechUnit;
+
+typedef enum {
   MECH_AXIS_X,
   MECH_AXIS_Y
 } MechAxis;

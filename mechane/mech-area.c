@@ -17,12 +17,17 @@
 
 #include <math.h>
 #include <cairo/cairo-gobject.h>
+#include <pango/pangocairo.h>
 
 #include <mechane/mech-marshal.h>
 #include <mechane/mech-stage-private.h>
 #include <mechane/mech-window-private.h>
 #include <mechane/mech-area-private.h>
 #include <mechane/mech-enum-types.h>
+
+#define MM_PER_INCH 25.4
+#define POINTS_PER_INCH 72.
+#define DEFAULT_DPI 96.
 
 #define MATRIX_IS_EQUAL(a,b) \
   ((a).xx == (b).xx &&       \
@@ -38,6 +43,7 @@
    (m).x0 == 0 && (m).y0 == 0)
 
 typedef struct _MechAreaPrivate MechAreaPrivate;
+typedef struct _PreferredAxisSize PreferredAxisSize;
 
 enum {
   PROP_0,
@@ -73,6 +79,9 @@ struct _MechAreaPrivate
 
   /* In stage coordinates, not affected by matrix. */
   cairo_rectangle_t rect;
+
+  /* Index is MechAxis */
+  PreferredAxisSize preferred_size[2];
 
   gdouble width_requested;
   gdouble height_requested;
@@ -438,9 +447,12 @@ mech_area_get_extent (MechArea *area,
   if ((axis == MECH_AXIS_X && priv->need_width_request) ||
       (axis == MECH_AXIS_Y && priv->need_height_request))
     {
-      gdouble val;
+      gdouble val, preferred;
 
       val = MECH_AREA_GET_CLASS (area)->get_extent (area, axis);
+
+      if (mech_area_get_preferred_size (area, axis, MECH_UNIT_PX, &preferred))
+        val = MAX (val, preferred);
 
       if (axis == MECH_AXIS_X)
         {
@@ -475,10 +487,14 @@ mech_area_get_second_extent (MechArea *area,
   if ((axis == MECH_AXIS_X && priv->need_width_request) ||
       (axis == MECH_AXIS_Y && priv->need_height_request))
     {
-      gdouble val;
+      gdouble val, preferred;
 
       val = MECH_AREA_GET_CLASS (area)->get_second_extent (area, axis,
                                                            other_value);
+
+      if (mech_area_get_preferred_size (area, axis, MECH_UNIT_PX, &preferred))
+        val = MAX (val, preferred);
+
       if (axis == MECH_AXIS_X)
         {
           priv->width_requested = val;
@@ -619,6 +635,76 @@ mech_area_get_allocated_size (MechArea          *area,
 
   *size = priv->rect;
   _mech_area_stage_to_parent (area, &size->x, &size->y);
+}
+
+static PreferredAxisSize *
+_mech_area_peek_size (MechArea *area,
+                      MechAxis  axis)
+{
+  MechAreaPrivate *priv;
+
+  priv = mech_area_get_instance_private (area);
+  axis = CLAMP (axis, MECH_AXIS_X, MECH_AXIS_Y);
+
+  return &priv->preferred_size[axis];
+}
+
+void
+mech_area_unset_preferred_size (MechArea *area,
+                                MechAxis  axis)
+{
+  PreferredAxisSize *size;
+
+  g_return_if_fail (MECH_IS_AREA (area));
+  g_return_if_fail (axis == MECH_AXIS_X || axis == MECH_AXIS_Y);
+
+  size = _mech_area_peek_size (area, axis);
+  size->is_set = FALSE;
+}
+
+void
+mech_area_set_preferred_size (MechArea *area,
+                              MechAxis  axis,
+                              MechUnit  unit,
+                              gdouble   value)
+{
+  PreferredAxisSize *size;
+
+  g_return_if_fail (MECH_IS_AREA (area));
+  g_return_if_fail (axis == MECH_AXIS_X || axis == MECH_AXIS_Y);
+  g_return_if_fail (unit >= MECH_UNIT_PX && unit <= MECH_UNIT_PERCENTAGE);
+
+  size = _mech_area_peek_size (area, axis);
+  size->value = value;
+  size->unit = unit;
+  size->is_set = TRUE;
+}
+
+gboolean
+mech_area_get_preferred_size (MechArea *area,
+                              MechAxis  axis,
+                              MechUnit  unit,
+                              gdouble  *value)
+{
+  PreferredAxisSize *size;
+
+  g_return_val_if_fail (MECH_IS_AREA (area), FALSE);
+  g_return_val_if_fail (axis == MECH_AXIS_X || axis == MECH_AXIS_Y, FALSE);
+  g_return_val_if_fail (unit >= MECH_UNIT_PX &&
+                        unit <= MECH_UNIT_PERCENTAGE, FALSE);
+
+  size = _mech_area_peek_size (area, axis);
+
+  if (value)
+    {
+      *value = 0;
+
+      if (size->is_set)
+        *value = round (mech_area_translate_unit (area, size->value,
+                                                  size->unit, unit, axis));
+    }
+
+  return size->is_set;
 }
 
 void
@@ -1506,6 +1592,178 @@ mech_area_redraw (MechArea       *area,
   stage = _mech_window_get_stage (window);
   _mech_stage_invalidate (stage, area, region, FALSE);
   mech_window_queue_draw (window);
+}
+
+static gdouble
+_unit_to_px (MechArea *area,
+             MechAxis  axis,
+             MechUnit  unit,
+             gdouble   value)
+{
+  gint width_mm, width;
+  MechMonitor *monitor;
+  MechWindow *window;
+  gdouble pixels;
+  GNode *node;
+
+  node = _mech_area_get_node (area);
+
+  switch (unit)
+    {
+    case MECH_UNIT_PX:
+      pixels = value;
+      break;
+    case MECH_UNIT_EM:
+      {
+        PangoFontMap *font_map;
+        PangoContext *context;
+        gdouble resolution;
+
+        font_map = pango_cairo_font_map_get_default ();
+        context = pango_font_map_create_context (font_map);
+        resolution = pango_cairo_context_get_resolution (context);
+
+        if (resolution < 0)
+          resolution = DEFAULT_DPI;
+
+        pixels = value * (resolution / POINTS_PER_INCH);
+        g_object_unref (context);
+        break;
+      }
+    case MECH_UNIT_IN:
+    case MECH_UNIT_MM:
+      {
+        window = mech_area_get_window (area);
+        monitor = mech_window_get_monitor (window);
+        mech_monitor_get_mm_extents (monitor, &width_mm, NULL);
+        mech_monitor_get_extents (monitor, &width, NULL);
+        pixels = (value * width) / width_mm;
+
+        if (unit == MECH_UNIT_IN)
+          pixels /= MM_PER_INCH;
+
+        break;
+      }
+    case MECH_UNIT_PERCENTAGE:
+      if (node->parent)
+        {
+          cairo_rectangle_t size;
+          MechArea *check;
+
+          check = node->parent->data;
+          mech_area_get_allocated_size (check, &size);
+
+          if (axis == MECH_AXIS_X)
+            pixels = value * size.width;
+          else
+            pixels = value * size.height;
+
+          break;
+        }
+    default:
+      pixels = 0;
+      break;
+    }
+
+  return pixels;
+}
+
+static gdouble
+_px_to_unit (MechArea *area,
+             MechAxis  axis,
+             MechUnit  unit,
+             gdouble   pixels)
+{
+  gdouble value;
+  GNode *node;
+
+  node = _mech_area_get_node (area);
+
+  switch (unit)
+    {
+    case MECH_UNIT_PX:
+      value = pixels;
+      break;
+    case MECH_UNIT_EM:
+      {
+        PangoFontMap *font_map;
+        PangoContext *context;
+        gdouble resolution;
+
+        font_map = pango_cairo_font_map_get_default ();
+        context = pango_font_map_create_context (font_map);
+        resolution = pango_cairo_context_get_resolution (context);
+
+        if (resolution < 0)
+          resolution = DEFAULT_DPI;
+
+        value = pixels * (POINTS_PER_INCH / resolution);
+        g_object_unref (font_map);
+        break;
+      }
+    case MECH_UNIT_IN:
+    case MECH_UNIT_MM:
+      {
+        gint width_mm, width;
+        MechMonitor *monitor;
+        MechWindow *window;
+
+        window = mech_area_get_window (area);
+        monitor = mech_window_get_monitor (window);
+        mech_monitor_get_mm_extents (monitor, &width_mm, NULL);
+        mech_monitor_get_extents (monitor, &width, NULL);
+        value = (pixels * width_mm) / width;
+
+        if (unit == MECH_UNIT_IN)
+          value *= MM_PER_INCH;
+
+        break;
+      }
+    case MECH_UNIT_PERCENTAGE:
+      if (node->parent)
+        {
+          cairo_rectangle_t size;
+          MechArea *check;
+
+          check = node->parent->data;
+          mech_area_get_allocated_size (check, &size);
+
+          if (axis == MECH_AXIS_X)
+            value = pixels / size.width;
+          else
+            value = pixels / size.height;
+
+          break;
+        }
+    default:
+      value = 0;
+      break;
+    }
+
+  return value;
+}
+
+gdouble
+mech_area_translate_unit (MechArea *area,
+                          gdouble   value,
+                          MechUnit  from,
+                          MechUnit  to,
+                          MechAxis  axis)
+{
+  gdouble pixels;
+
+  g_return_val_if_fail (MECH_IS_AREA (area), 0);
+  g_return_val_if_fail (from >= MECH_UNIT_PX && to <= MECH_UNIT_PERCENTAGE, 0);
+  g_return_val_if_fail (to >= MECH_UNIT_PX && to <= MECH_UNIT_PERCENTAGE, 0);
+
+  if (value == 0)
+    return 0;
+
+  if (from == to)
+    return value;
+
+  pixels = _unit_to_px (area, axis, from, value);
+  return _px_to_unit (area, axis, to, pixels);
 }
 
 void

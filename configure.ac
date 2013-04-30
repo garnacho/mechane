@@ -27,6 +27,7 @@ AM_SILENT_RULES([yes])
 # versions we depend on
 GLIB_VERSION=2.37.4
 CAIRO_VERSION=1.10
+PANGO_VERSION=1.28
 WAYLAND_VERSION=1.0
 XKB_COMMON_VERSION=0.2
 
@@ -65,9 +66,11 @@ AC_SUBST(MECH_API_VERSION)
 PKG_CHECK_MODULES(MECH_DEPS, [
         gobject-2.0 >= $GLIB_VERSION
         gio-2.0 >= $GLIB_VERSION
-	cairo >= $CAIRO_VERSION
+        cairo >= $CAIRO_VERSION
         cairo-gobject >= $CAIRO_VERSION
-	])
+        pango >= $PANGO_VERSION
+        pangocairo >= $PANGO_VERSION
+        ])
 
 # wayland deps
 PKG_CHECK_MODULES(MECH_WAYLAND_DEPS, [

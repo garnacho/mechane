@@ -121,6 +121,17 @@ MechEventMask    mech_area_get_events           (MechArea        *area);
 gboolean         mech_area_handles_event        (MechArea        *area,
                                                  MechEventType    event_type);
 
+void             mech_area_set_preferred_size   (MechArea          *area,
+                                                 MechAxis           axis,
+                                                 MechUnit           unit,
+                                                 gdouble            value);
+void             mech_area_unset_preferred_size (MechArea          *area,
+                                                 MechAxis           axis);
+gboolean         mech_area_get_preferred_size   (MechArea          *area,
+                                                 MechAxis           axis,
+                                                 MechUnit           unit,
+                                                 gdouble           *value);
+
 void             mech_area_check_size           (MechArea          *area);
 
 void             mech_area_allocate_size        (MechArea          *area,
@@ -159,6 +170,12 @@ void             mech_area_redraw               (MechArea          *area,
 
 void             mech_area_grab_focus           (MechArea          *area,
                                                  MechSeat          *seat);
+
+gdouble          mech_area_translate_unit       (MechArea          *area,
+                                                 gdouble            value,
+                                                 MechUnit           from,
+                                                 MechUnit           to,
+                                                 MechAxis           axis);
 
 void             mech_area_set_name             (MechArea          *area,
                                                  const gchar       *name);
