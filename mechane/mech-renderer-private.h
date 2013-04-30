@@ -28,7 +28,13 @@ MechRenderer * _mech_renderer_new                    (void);
 
 gint           _mech_renderer_add_background         (MechRenderer          *renderer,
                                                       MechPattern           *pattern);
-
+gint           _mech_renderer_add_foreground         (MechRenderer          *renderer,
+                                                      MechPattern           *pattern);
+void           _mech_renderer_set_font_family        (MechRenderer          *renderer,
+                                                      const gchar           *family);
+void           _mech_renderer_set_font_size          (MechRenderer          *renderer,
+                                                      gdouble                size,
+                                                      MechUnit               unit);
 void           _mech_renderer_set_padding            (MechRenderer          *renderer,
                                                       MechBorder            *border);
 void           _mech_renderer_set_margin             (MechRenderer          *renderer,

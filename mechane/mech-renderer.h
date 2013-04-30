@@ -45,12 +45,19 @@ struct _MechRendererClass
 
 GType          mech_renderer_get_type           (void) G_GNUC_CONST;
 
+PangoLayout *  mech_renderer_create_layout      (MechRenderer    *renderer,
+                                                 const gchar     *text);
+PangoContext * mech_renderer_get_font_context   (MechRenderer    *renderer);
+
 void           mech_renderer_render_background  (MechRenderer    *renderer,
                                                  cairo_t         *cr,
                                                  gdouble          x,
                                                  gdouble          y,
                                                  gdouble          width,
                                                  gdouble          height);
+void           mech_renderer_render_layout      (MechRenderer    *renderer,
+                                                 cairo_t         *cr,
+                                                 PangoLayout     *layout);
 
 G_END_DECLS
 
