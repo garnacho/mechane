@@ -43,13 +43,32 @@ struct _MechRendererClass
   GObjectClass parent_class;
 };
 
+typedef enum {
+  MECH_EXTENT_MARGIN,
+  MECH_EXTENT_BORDER,
+  MECH_EXTENT_PADDING,
+  MECH_EXTENT_CONTENT
+} MechExtentType;
+
 GType          mech_renderer_get_type           (void) G_GNUC_CONST;
 
 PangoLayout *  mech_renderer_create_layout      (MechRenderer    *renderer,
                                                  const gchar     *text);
 PangoContext * mech_renderer_get_font_context   (MechRenderer    *renderer);
 
+void           mech_renderer_set_border_path    (MechRenderer    *renderer,
+                                                 cairo_t         *cr,
+                                                 gdouble          x,
+                                                 gdouble          y,
+                                                 gdouble          width,
+                                                 gdouble          height);
 void           mech_renderer_render_background  (MechRenderer    *renderer,
+                                                 cairo_t         *cr,
+                                                 gdouble          x,
+                                                 gdouble          y,
+                                                 gdouble          width,
+                                                 gdouble          height);
+void           mech_renderer_render_border      (MechRenderer    *renderer,
                                                  cairo_t         *cr,
                                                  gdouble          x,
                                                  gdouble          y,
@@ -58,6 +77,10 @@ void           mech_renderer_render_background  (MechRenderer    *renderer,
 void           mech_renderer_render_layout      (MechRenderer    *renderer,
                                                  cairo_t         *cr,
                                                  PangoLayout     *layout);
+
+void           mech_renderer_get_border_extents (MechRenderer    *renderer,
+                                                 MechExtentType   extent_type,
+                                                 MechBorder      *border);
 
 G_END_DECLS
 

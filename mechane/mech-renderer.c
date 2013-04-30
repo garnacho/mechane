@@ -22,7 +22,39 @@
 #include "mech-renderer-private.h"
 #include "mech-renderer.h"
 
+#define MIN4(a,b,c,d) MIN (MIN ((a), (b)), MIN ((c), (d)))
+#define NORMALIZE_CORNERS(s) G_STMT_START { \
+    if (((s) & (MECH_SIDE_FLAG_LEFT | MECH_SIDE_FLAG_RIGHT)) && \
+        !((s) & (MECH_SIDE_FLAG_TOP | MECH_SIDE_FLAG_BOTTOM)))  \
+      (s) |= (MECH_SIDE_FLAG_TOP | MECH_SIDE_FLAG_BOTTOM);      \
+    if (((s) & (MECH_SIDE_FLAG_TOP | MECH_SIDE_FLAG_BOTTOM)) && \
+        !((s) & (MECH_SIDE_FLAG_LEFT | MECH_SIDE_FLAG_RIGHT)))  \
+      (s) |= (MECH_SIDE_FLAG_LEFT | MECH_SIDE_FLAG_RIGHT);      \
+  } G_STMT_END
+
+#define ADD_BORDER(a,b)                         \
+  G_STMT_START {                                \
+    (a)->left += (b)->left;                     \
+    (a)->right += (b)->right;                   \
+    (a)->top += (b)->top;                       \
+    (a)->bottom += (b)->bottom;                 \
+  } G_STMT_END
+
 typedef struct _MechRendererPrivate MechRendererPrivate;
+typedef struct _BorderData BorderData;
+
+enum {
+  MECH_CORNER_TOP_LEFT,
+  MECH_CORNER_TOP_RIGHT,
+  MECH_CORNER_BOTTOM_RIGHT,
+  MECH_CORNER_BOTTOM_LEFT
+};
+
+struct _BorderData
+{
+  MechPattern *pattern;
+  MechBorder border;
+};
 
 struct _MechRendererPrivate
 {
@@ -31,9 +63,12 @@ struct _MechRendererPrivate
 
   MechBorder margin;
   MechBorder padding;
+  MechBorder border;
 
   GArray *foregrounds;
   GArray *backgrounds;
+  GArray *borders;
+  gdouble radii[4];
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (MechRenderer, mech_renderer, G_TYPE_OBJECT)
@@ -54,8 +89,15 @@ mech_renderer_finalize (GObject *object)
   for (i = 0; i < priv->backgrounds->len; i++)
     _mech_pattern_unref (g_array_index (priv->backgrounds, MechPattern *, i));
 
+  for (i = 0; i < priv->borders->len; i++)
+    {
+      BorderData *data = &g_array_index (priv->borders, BorderData, i);
+      _mech_pattern_unref (data->pattern);
+    }
+
   g_array_unref (priv->foregrounds);
   g_array_unref (priv->backgrounds);
+  g_array_unref (priv->borders);
 
   G_OBJECT_CLASS (mech_renderer_parent_class)->finalize (object);
 }
@@ -77,6 +119,7 @@ mech_renderer_init (MechRenderer *renderer)
   priv = mech_renderer_get_instance_private (renderer);
   priv->foregrounds = g_array_new (FALSE, FALSE, sizeof (MechPattern *));
   priv->backgrounds = g_array_new (FALSE, FALSE, sizeof (MechPattern *));
+  priv->borders = g_array_new (FALSE, FALSE, sizeof (BorderData));
 
   priv->margin.left = priv->margin.right = 0;
   priv->margin.top = priv->margin.bottom = 0;
@@ -96,6 +139,136 @@ _mech_renderer_new (void)
   return g_object_new (MECH_TYPE_RENDERER, NULL);
 }
 
+static void
+_mech_renderer_rounded_rectangle (MechRenderer *renderer,
+                                  cairo_t      *cr,
+                                  gdouble       x,
+                                  gdouble       y,
+                                  gdouble       width,
+                                  gdouble       height,
+                                  gdouble       radius_diff)
+{
+  gdouble radius, max_radius;
+  MechRendererPrivate *priv;
+
+  priv = mech_renderer_get_instance_private (renderer);
+  max_radius = MIN (width / 2, height / 2);
+
+  /* Top border */
+  radius = CLAMP (priv->radii[MECH_CORNER_TOP_LEFT] - radius_diff,
+                  0, max_radius);
+  cairo_move_to (cr, x + radius, y);
+
+  radius = CLAMP (priv->radii[MECH_CORNER_TOP_RIGHT] - radius_diff,
+                  0, max_radius);
+  cairo_line_to (cr, x + width - radius, y);
+
+  /* Top/right corner */
+  if (radius > 0)
+    cairo_arc (cr, x + width - radius, y + radius, radius, 3 * G_PI / 2, 0);
+
+  radius = CLAMP (priv->radii[MECH_CORNER_BOTTOM_RIGHT] - radius_diff,
+                  0, max_radius);
+
+  /* Right border */
+  cairo_line_to (cr, x + width, y + height - radius);
+
+  /* Bottom/right corner */
+  if (radius > 0)
+    cairo_arc (cr, x + width - radius,
+               y + height - radius, radius, 0, G_PI / 2);
+
+  radius = CLAMP (priv->radii[MECH_CORNER_BOTTOM_LEFT] - radius_diff,
+                  0, max_radius);
+
+  /* Bottom border */
+  cairo_line_to (cr, x + radius, y + height);
+
+  /* Bottom/left corner */
+  if (radius > 0)
+    cairo_arc (cr, x + radius, y + height - radius, radius, G_PI / 2, G_PI);
+
+  radius = CLAMP (priv->radii[MECH_CORNER_TOP_LEFT] - radius_diff,
+                  0, max_radius);
+
+  /* Left border */
+  cairo_line_to (cr, x, y + radius);
+
+  /* Top/left corner */
+  if (radius > 0)
+    cairo_arc (cr, x + radius, y + radius, radius, G_PI, 3 * G_PI / 2);
+
+  cairo_close_path (cr);
+}
+
+static void
+_mech_renderer_apply_background (MechRenderer            *renderer,
+                                 cairo_t                 *cr,
+                                 MechPattern             *pattern,
+                                 const cairo_rectangle_t *rect,
+                                 gdouble                  radius_diff)
+{
+  _mech_renderer_rounded_rectangle (renderer, cr,
+                                    rect->x, rect->y,
+                                    rect->width, rect->height,
+                                    radius_diff);
+  _mech_pattern_render (pattern, cr, rect);
+}
+
+static void
+_mech_renderer_apply_border (MechRenderer      *renderer,
+                             cairo_t           *cr,
+                             BorderData        *border,
+                             cairo_rectangle_t *rect,
+                             gdouble           *radius_diff)
+{
+  cairo_set_line_width (cr, 1);
+  cairo_set_fill_rule (cr, CAIRO_FILL_RULE_EVEN_ODD);
+
+  _mech_renderer_rounded_rectangle (renderer, cr,
+                                    rect->x, rect->y,
+                                    rect->width, rect->height,
+                                    *radius_diff);
+  _mech_pattern_set_source (border->pattern, cr, rect);
+
+  /* FIXME: deal with unit */
+  rect->x += border->border.left;
+  rect->y += border->border.top;
+  rect->width -= border->border.left + border->border.right;
+  rect->height -= border->border.top + border->border.bottom;
+
+  *radius_diff += MIN4 (border->border.left, border->border.right,
+                        border->border.top, border->border.bottom);
+
+  _mech_renderer_rounded_rectangle (renderer, cr,
+                                    rect->x, rect->y,
+                                    rect->width, rect->height,
+                                    *radius_diff);
+  cairo_fill (cr);
+}
+
+void
+_mech_renderer_set_corner_radius (MechRenderer *renderer,
+                                  guint         corners,
+                                  gdouble       radius)
+{
+  MechRendererPrivate *priv;
+
+  g_return_if_fail (MECH_IS_RENDERER (renderer));
+
+  priv = mech_renderer_get_instance_private (renderer);
+  NORMALIZE_CORNERS (corners);
+
+  if ((corners & MECH_SIDE_FLAG_CORNER_TOP_LEFT) == MECH_SIDE_FLAG_CORNER_TOP_LEFT)
+    priv->radii[MECH_CORNER_TOP_LEFT] = radius;
+  if ((corners & MECH_SIDE_FLAG_CORNER_TOP_RIGHT) == MECH_SIDE_FLAG_CORNER_TOP_RIGHT)
+    priv->radii[MECH_CORNER_TOP_RIGHT] = radius;
+  if ((corners & MECH_SIDE_FLAG_CORNER_BOTTOM_LEFT) == MECH_SIDE_FLAG_CORNER_BOTTOM_LEFT)
+    priv->radii[MECH_CORNER_BOTTOM_LEFT] = radius;
+  if ((corners & MECH_SIDE_FLAG_CORNER_BOTTOM_RIGHT) == MECH_SIDE_FLAG_CORNER_BOTTOM_RIGHT)
+    priv->radii[MECH_CORNER_BOTTOM_RIGHT] = radius;
+}
+
 gint
 _mech_renderer_add_background (MechRenderer *renderer,
                                MechPattern  *pattern)
@@ -110,6 +283,28 @@ _mech_renderer_add_background (MechRenderer *renderer,
   g_array_append_val (priv->backgrounds, pattern);
 
   return priv->backgrounds->len - 1;
+}
+
+gint
+_mech_renderer_add_border (MechRenderer *renderer,
+                           MechPattern  *pattern,
+                           MechBorder   *border)
+{
+  MechRendererPrivate *priv;
+  BorderData data;
+
+  g_return_val_if_fail (MECH_IS_RENDERER (renderer), -1);
+  g_return_val_if_fail (pattern != NULL, -1);
+  g_return_val_if_fail (border != NULL, -1);
+
+  priv = mech_renderer_get_instance_private (renderer);
+  data.pattern = _mech_pattern_ref (pattern);
+  data.border = *border;
+  g_array_append_val (priv->borders, data);
+
+  ADD_BORDER (&priv->border, border);
+
+  return priv->borders->len - 1;
 }
 
 gint
@@ -203,6 +398,28 @@ _mech_renderer_set_margin (MechRenderer *renderer,
 }
 
 void
+mech_renderer_set_border_path (MechRenderer *renderer,
+                               cairo_t      *cr,
+                               gdouble       x,
+                               gdouble       y,
+                               gdouble       width,
+                               gdouble       height)
+{
+  cairo_rectangle_t border;
+
+  g_return_if_fail (MECH_IS_RENDERER (renderer));
+  g_return_if_fail (cr != NULL);
+
+  border.x = x;
+  border.y = y;
+  border.width = width;
+  border.height = height;
+
+  _mech_renderer_rounded_rectangle (renderer, cr, border.x, border.y,
+                                    border.width, border.height, 0);
+}
+
+void
 mech_renderer_render_background (MechRenderer *renderer,
                                  cairo_t      *cr,
                                  gdouble       x,
@@ -213,21 +430,57 @@ mech_renderer_render_background (MechRenderer *renderer,
   cairo_rectangle_t rect = { x, y, width, height };
   MechRendererPrivate *priv;
   MechPattern *pattern;
+  gdouble radius;
   guint i;
 
   g_return_if_fail (MECH_IS_RENDERER (renderer));
   g_return_if_fail (cr != NULL);
 
   priv = mech_renderer_get_instance_private (renderer);
+  radius = MIN4 (priv->border.left, priv->border.right,
+                 priv->border.top, priv->border.bottom);
 
   cairo_save (cr);
 
   for (i = 0; i < priv->backgrounds->len; i++)
     {
       pattern = g_array_index (priv->backgrounds, MechPattern *, i);
-      cairo_rectangle (cr, x, y, width, height);
-      _mech_pattern_render (pattern, cr, &rect);
-      cairo_fill (cr);
+      _mech_renderer_apply_background (renderer, cr, pattern, &rect, radius);
+    }
+
+  cairo_restore (cr);
+}
+
+void
+mech_renderer_render_border (MechRenderer *renderer,
+                             cairo_t      *cr,
+                             gdouble       x,
+                             gdouble       y,
+                             gdouble       width,
+                             gdouble       height)
+{
+  MechRendererPrivate *priv;
+  cairo_rectangle_t border;
+  BorderData *border_data;
+  gdouble radius_diff = 0;
+  guint i;
+
+  g_return_if_fail (MECH_IS_RENDERER (renderer));
+  g_return_if_fail (cr != NULL);
+
+  priv = mech_renderer_get_instance_private (renderer);
+  border.x = x;
+  border.y = y;
+  border.width = width;
+  border.height = height;
+
+  cairo_save (cr);
+
+  for (i = 0; i < priv->borders->len; i++)
+    {
+      border_data = &g_array_index (priv->borders, BorderData, i);
+      _mech_renderer_apply_border (renderer, cr, border_data,
+                                   &border, &radius_diff);
     }
 
   cairo_restore (cr);
@@ -313,4 +566,30 @@ mech_renderer_get_font_context (MechRenderer *renderer)
 
   priv = mech_renderer_get_instance_private (renderer);
   return priv->font_context;
+}
+
+void
+mech_renderer_get_border_extents (MechRenderer   *renderer,
+                                  MechExtentType  type,
+                                  MechBorder     *border)
+{
+  MechRendererPrivate *priv;
+  MechBorder accum = { 0 };
+
+  g_return_if_fail (MECH_IS_RENDERER (renderer));
+  g_return_if_fail (border != NULL);
+
+  /* FIXME: deal with units */
+  priv = mech_renderer_get_instance_private (renderer);
+
+  if (type > MECH_EXTENT_MARGIN)
+    ADD_BORDER (&accum, &priv->margin);
+
+  if (type > MECH_EXTENT_BORDER)
+    ADD_BORDER (&accum, &priv->border);
+
+  if (type > MECH_EXTENT_PADDING)
+    ADD_BORDER (&accum, &priv->padding);
+
+  *border = accum;
 }

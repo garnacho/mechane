@@ -26,8 +26,15 @@ G_BEGIN_DECLS
 
 MechRenderer * _mech_renderer_new                    (void);
 
+void           _mech_renderer_set_corner_radius      (MechRenderer          *renderer,
+                                                      guint                  corners,
+                                                      gdouble                radius);
+
 gint           _mech_renderer_add_background         (MechRenderer          *renderer,
                                                       MechPattern           *pattern);
+gint           _mech_renderer_add_border             (MechRenderer          *renderer,
+                                                      MechPattern           *pattern,
+                                                      MechBorder            *border);
 gint           _mech_renderer_add_foreground         (MechRenderer          *renderer,
                                                       MechPattern           *pattern);
 void           _mech_renderer_set_font_family        (MechRenderer          *renderer,
