@@ -157,6 +157,12 @@ void             mech_area_get_extents          (MechArea          *area,
                                                  MechArea          *relative_to,
                                                  cairo_rectangle_t *extents);
 
+void             mech_area_set_state_flags      (MechArea          *area,
+						 MechStateFlags     state);
+void             mech_area_unset_state_flags    (MechArea          *area,
+						 MechStateFlags     state);
+MechStateFlags   mech_area_get_state            (MechArea          *area);
+
 void             mech_area_set_visible          (MechArea          *area,
 						 gboolean           visible);
 gboolean         mech_area_get_visible          (MechArea          *area);

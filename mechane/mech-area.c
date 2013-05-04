@@ -89,6 +89,7 @@ struct _MechAreaPrivate
   gint depth;
 
   guint evmask              : 16;
+  guint state               : 9;
   guint clip                : 1;
   guint is_identity         : 1;
   guint visible             : 1;
@@ -119,6 +120,43 @@ mech_area_init (MechArea *area)
   priv->rect.width = priv->rect.height = 0;
   priv->need_width_request = priv->need_height_request = TRUE;
   priv->need_allocate_size = TRUE;
+}
+
+static gboolean
+mech_area_handle_event_impl (MechArea  *area,
+                             MechEvent *event)
+{
+  if (mech_event_has_flags (event, MECH_EVENT_FLAG_CAPTURE_PHASE))
+    return FALSE;
+
+  if (area != event->any.target)
+    return FALSE;
+
+  switch (event->type)
+    {
+    case MECH_BUTTON_PRESS:
+      mech_area_set_state_flags (area, MECH_STATE_FLAG_PRESSED);
+      break;
+    case MECH_BUTTON_RELEASE:
+      mech_area_unset_state_flags (area, MECH_STATE_FLAG_PRESSED);
+      break;
+    case MECH_FOCUS_IN:
+      mech_area_set_state_flags (area, MECH_STATE_FLAG_FOCUSED);
+      break;
+    case MECH_FOCUS_OUT:
+      mech_area_unset_state_flags (area, MECH_STATE_FLAG_FOCUSED);
+      break;
+    case MECH_ENTER:
+      mech_area_set_state_flags (area, MECH_STATE_FLAG_HOVERED);
+      break;
+    case MECH_LEAVE:
+      mech_area_unset_state_flags (area, MECH_STATE_FLAG_HOVERED);
+      break;
+    default:
+      break;
+    }
+
+  return FALSE;
 }
 
 static void
@@ -325,6 +363,7 @@ mech_area_class_init (MechAreaClass *klass)
   object_class->finalize = mech_area_finalize;
   object_class->dispose = mech_area_dispose;
 
+  klass->handle_event = mech_area_handle_event_impl;
   klass->get_extent = mech_area_get_extent_impl;
   klass->get_second_extent = mech_area_get_second_extent_impl;
   klass->allocate_size = mech_area_allocate_size_impl;
@@ -1336,6 +1375,43 @@ _mech_area_handle_event (MechArea  *area,
   g_signal_emit (area, signals[HANDLE_EVENT], 0, event, &retval);
 
   return retval;
+}
+
+void
+mech_area_set_state_flags (MechArea       *area,
+                           MechStateFlags  state)
+{
+  MechAreaPrivate *priv;
+
+  g_return_if_fail (MECH_IS_AREA (area));
+
+  priv = mech_area_get_instance_private (area);
+  priv->state |= state;
+  mech_area_redraw (area, NULL);
+}
+
+void
+mech_area_unset_state_flags (MechArea       *area,
+                             MechStateFlags  state)
+{
+  MechAreaPrivate *priv;
+
+  g_return_if_fail (MECH_IS_AREA (area));
+
+  priv = mech_area_get_instance_private (area);
+  priv->state &= ~(state);
+  mech_area_redraw (area, NULL);
+}
+
+MechStateFlags
+mech_area_get_state (MechArea *area)
+{
+  MechAreaPrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_AREA (area), MECH_STATE_FLAG_NONE);
+
+  priv = mech_area_get_instance_private (area);
+  return priv->state;
 }
 
 static gboolean
