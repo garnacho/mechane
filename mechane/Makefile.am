@@ -18,6 +18,7 @@ mech_sources = 			\
 	mech-renderer.c		\
 	mech-seat.c		\
 	mech-stage.c		\
+	mech-style.c		\
 	mech-surface.c		\
 	mech-types.c		\
 	mech-window.c
