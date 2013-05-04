@@ -139,6 +139,69 @@ _mech_renderer_new (void)
   return g_object_new (MECH_TYPE_RENDERER, NULL);
 }
 
+MechRenderer *
+_mech_renderer_copy (MechRenderer          *renderer,
+                     MechRendererCopyFlags  flags)
+{
+  MechRendererPrivate *priv, *copy_priv;
+  MechRenderer *copy;
+  guint i;
+
+  copy = _mech_renderer_new ();
+  priv = mech_renderer_get_instance_private (renderer);
+  copy_priv = mech_renderer_get_instance_private (copy);
+
+  if (flags & MECH_RENDERER_COPY_BACKGROUND)
+    {
+      g_array_append_vals (copy_priv->backgrounds,
+                           priv->backgrounds->data,
+                           priv->backgrounds->len);
+
+      for (i = 0; i < copy_priv->backgrounds->len; i++)
+        _mech_pattern_ref (g_array_index (copy_priv->backgrounds,
+                                          MechPattern *, i));
+    }
+
+  if (flags & MECH_RENDERER_COPY_FOREGROUND)
+    {
+      g_object_unref (copy_priv->font_context);
+      copy_priv->font_context = g_object_ref (priv->font_context);
+
+      pango_font_description_free (copy_priv->font_desc);
+      copy_priv->font_desc = pango_font_description_copy (priv->font_desc);
+
+      g_array_append_vals (copy_priv->foregrounds,
+                           priv->foregrounds->data,
+                           priv->foregrounds->len);
+
+      for (i = 0; i < copy_priv->foregrounds->len; i++)
+        _mech_pattern_ref (g_array_index (copy_priv->foregrounds,
+                                          MechPattern *, i));
+    }
+
+  if (flags & MECH_RENDERER_COPY_BORDER)
+    {
+      copy_priv->margin = priv->margin;
+      copy_priv->padding = priv->padding;
+      memcpy (copy_priv->radii, priv->radii,
+              sizeof (double) * G_N_ELEMENTS (priv->radii));
+
+      g_array_append_vals (copy_priv->borders,
+                           priv->borders->data,
+                           priv->borders->len);
+
+      for (i = 0; i < copy_priv->borders->len; i++)
+        {
+          BorderData *border;
+
+          border = &g_array_index (priv->borders, BorderData, i);
+          _mech_pattern_ref (border->pattern);
+        }
+    }
+
+  return copy;
+}
+
 static void
 _mech_renderer_rounded_rectangle (MechRenderer *renderer,
                                   cairo_t      *cr,

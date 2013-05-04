@@ -24,7 +24,16 @@
 
 G_BEGIN_DECLS
 
+typedef enum {
+  MECH_RENDERER_COPY_BACKGROUND,
+  MECH_RENDERER_COPY_FOREGROUND,
+  MECH_RENDERER_COPY_BORDER
+} MechRendererCopyFlags;
+
 MechRenderer * _mech_renderer_new                    (void);
+
+MechRenderer * _mech_renderer_copy                   (MechRenderer          *renderer,
+                                                      MechRendererCopyFlags  flags);
 
 void           _mech_renderer_set_corner_radius      (MechRenderer          *renderer,
                                                       guint                  corners,
