@@ -111,6 +111,20 @@ guint    _mech_parser_rule_literal_create   (MechParser            *parser,
 guint    _mech_parser_rule_compound_create  (MechParser            *parser,
                                              guint                 *rules,
                                              guint                  n_rules);
+guint    _mech_parser_rule_or_create        (MechParser            *parser,
+                                             guint                 *rules,
+                                             guint                  n_rules);
+guint    _mech_parser_rule_multi_create     (MechParser            *parser,
+                                             guint                  child_rule,
+                                             guchar                 separator,
+                                             gint                   min,
+                                             gint                   max);
+guint    _mech_parser_rule_container_create (MechParser            *parser,
+                                             guint                  child,
+                                             guchar                 open_container,
+                                             guchar                 close_container);
+guint    _mech_parser_rule_optional_create  (MechParser            *parser,
+                                             guint                  child);
 
 G_END_DECLS
 

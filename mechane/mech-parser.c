@@ -37,7 +37,11 @@ enum _ParserRuleType {
   RULE_BASIC,
   RULE_CONVERTER,
   RULE_LITERAL,
-  RULE_COMPOUND
+  RULE_COMPOUND,
+  RULE_OR,
+  RULE_MULTI,
+  RULE_CONTAINER,
+  RULE_OPTIONAL
 };
 
 enum MechParserError {
@@ -63,6 +67,17 @@ struct _ParserRule
       const gchar *str;
       gsize len;
     } literal;
+
+    struct {
+      guchar open_container;
+      guchar close_container;
+    } container;
+
+    struct {
+      guchar separator;
+      gint min;
+      gint max;
+    } multi;
   } data;
 };
 
@@ -1044,6 +1059,116 @@ _mech_parser_rule_compound_create (MechParser *parser,
   return priv->rules->len;
 }
 
+guint
+_mech_parser_rule_or_create (MechParser *parser,
+                             guint      *rules,
+                             guint       n_rules)
+{
+  MechParserPrivate *priv;
+  ParserRule rule = { 0 };
+
+  g_return_val_if_fail (MECH_IS_PARSER (parser), 0);
+  g_return_val_if_fail (rules != NULL, 0);
+
+  priv = mech_parser_get_instance_private (parser);
+
+  rule.type = RULE_OR;
+  rule.child_rules = g_array_new (FALSE, FALSE, sizeof (guint));
+  g_array_insert_vals (rule.child_rules, 0, rules, n_rules);
+  g_array_append_val (priv->rules, rule);
+
+  return priv->rules->len;
+}
+
+guint
+_mech_parser_rule_multi_create (MechParser *parser,
+                                guint       child_rule,
+                                guchar      separator,
+                                gint        min,
+                                gint        max)
+{
+  MechParserPrivate *priv;
+  ParserRule rule = { 0 };
+  guint separator_rule;
+
+  g_return_val_if_fail (MECH_IS_PARSER (parser), 0);
+  g_return_val_if_fail (child_rule != 0, 0);
+  g_return_val_if_fail (separator != 0, 0);
+  g_return_val_if_fail (max < 0 || min <= max, 0);
+
+  priv = mech_parser_get_instance_private (parser);
+
+  rule.type = RULE_MULTI;
+  rule.data.multi.separator = separator;
+  rule.data.multi.min = min;
+  rule.data.multi.max = max;
+
+  rule.child_rules = g_array_new (FALSE, FALSE, sizeof (guint));
+  g_array_append_val (rule.child_rules, child_rule);
+
+  separator_rule = _mech_parser_rule_literal_char (parser, separator);
+  g_array_append_val (rule.child_rules, separator_rule);
+
+  g_array_append_val (priv->rules, rule);
+
+  return priv->rules->len;
+}
+
+guint
+_mech_parser_rule_container_create (MechParser *parser,
+                                    guint       child_rule,
+                                    guchar      open_container,
+                                    guchar      close_container)
+{
+  MechParserPrivate *priv;
+  ParserRule rule = { 0 };
+  guint container_rule;
+
+  g_return_val_if_fail (MECH_IS_PARSER (parser), 0);
+  g_return_val_if_fail (child_rule != 0, 0);
+  g_return_val_if_fail (open_container != 0, 0);
+  g_return_val_if_fail (close_container != 0, 0);
+
+  priv = mech_parser_get_instance_private (parser);
+
+  rule.type = RULE_CONTAINER;
+  rule.data.container.open_container = open_container;
+  rule.data.container.close_container = close_container;
+
+  rule.child_rules = g_array_new (FALSE, FALSE, sizeof (guint));
+
+  container_rule = _mech_parser_rule_literal_char (parser, open_container);
+  g_array_append_val (rule.child_rules, container_rule);
+  g_array_append_val (rule.child_rules, child_rule);
+
+  container_rule = _mech_parser_rule_literal_char (parser, close_container);
+  g_array_append_val (rule.child_rules, container_rule);
+
+  g_array_append_val (priv->rules, rule);
+
+  return priv->rules->len;
+}
+
+guint
+_mech_parser_rule_optional_create (MechParser *parser,
+                                   guint       child_rule)
+{
+  MechParserPrivate *priv;
+  ParserRule rule = { 0 };
+
+  g_return_val_if_fail (MECH_IS_PARSER (parser), 0);
+  g_return_val_if_fail (child_rule != 0, 0);
+
+  priv = mech_parser_get_instance_private (parser);
+
+  rule.type = RULE_OPTIONAL;
+  rule.child_rules = g_array_new (FALSE, FALSE, sizeof (guint));
+  g_array_append_val (rule.child_rules, child_rule);
+  g_array_append_val (priv->rules, rule);
+
+  return priv->rules->len;
+}
+
 void
 _mech_parser_set_root_rule (MechParser *parser,
                             guint       rule)
@@ -1086,13 +1211,92 @@ _parser_context_next_child_rule (MechParserContext *context,
 
       if (pos >= rule->child_rules->len)
         {
-          stack_data->finished = TRUE;
-          return FALSE;
+          /* MULTI rules iterate here */
+          if (rule->type == RULE_MULTI)
+            {
+              stack_data->n_iterations++;
+              pos = 0;
+            }
+          else
+            {
+              stack_data->finished = TRUE;
+              return FALSE;
+            }
         }
     }
 
   *next = pos;
   return TRUE;
+}
+
+static void
+_parser_context_enter_rule (MechParserContext *context,
+                            ParserRule        *rule)
+{
+  switch (rule->type)
+    {
+    case RULE_MULTI:
+      _parser_context_push_delimiter (context,
+                                      rule->data.multi.separator,
+                                      FALSE);
+      /* Fall through */
+    case RULE_CONVERTER:
+      _parser_context_push_data (context);
+      break;
+    case RULE_CONTAINER:
+      _parser_context_push_delimiter (context,
+                                      rule->data.container.close_container,
+                                      TRUE);
+      break;
+    default:
+      break;
+    }
+}
+
+static void
+_parser_context_leave_rule (MechParserContext *context,
+                            ParserRule        *rule)
+{
+  switch (rule->type)
+    {
+    case RULE_MULTI:
+      _parser_context_pop_data (context, NULL, NULL);
+      /* Fall through */
+    case RULE_CONTAINER:
+      _parser_context_pop_delimiter (context);
+      break;
+    case RULE_CONVERTER:
+      {
+        GValue new_value = { 0 };
+        GError *error = NULL;
+        GPtrArray *data;
+
+        if (_parser_context_peek_error (context, NULL, NULL))
+          break;
+
+        _parser_context_pop_data (context, &data, NULL);
+        _parser_context_data_remove_value (context);
+        g_value_init (&new_value, rule->data.converter.gtype);
+
+        if (rule->data.converter.func (context->parser, context,
+                                       data, &new_value, &error))
+          _parser_context_data_append_value (context, &new_value);
+        else
+          {
+            if (!error)
+              error = g_error_new (quark_parser_error,
+                                   MECH_PARSER_ERROR_FAILED,
+                                   "Failed to compose complex type '%s'",
+                                   g_type_name (rule->data.converter.gtype));
+            _parser_context_take_error (context, error, NULL);
+          }
+
+        g_ptr_array_unref (data);
+        break;
+      }
+    default:
+      break;
+    }
 }
 
 static gboolean
@@ -1142,6 +1346,21 @@ _parser_context_visit_rule (MechParserContext *context,
                              "Failed to parse literal '%s'",
                              rule->data.literal.str);
       break;
+    case RULE_MULTI:
+      stack_data = _parser_context_peek (context, NULL);
+
+      if (stack_data->finished && rule->data.multi.min >= 0 &&
+          stack_data->n_iterations < rule->data.multi.min)
+        error = g_error_new (quark_parser_error, MECH_PARSER_ERROR_FAILED,
+                             "Expected at least %d element(s), got %d",
+                             rule->data.multi.min, stack_data->n_iterations);
+      break;
+    case RULE_OR:
+      stack_data = _parser_context_peek (context, NULL);
+
+      if (!stack_data->finished && data->len > 0)
+        g_ptr_array_remove_index (data, data->len - 1);
+      break;
     default:
       break;
     }
@@ -1161,14 +1380,85 @@ _parser_context_visit_rule (MechParserContext *context,
 }
 
 static gboolean
+_parser_context_check_emit_error (MechParserContext *context)
+{
+  ParserStackedRule *stack_data;
+  ParserRule *rule;
+  gchar *error_pos;
+  gboolean retval;
+  GError *error;
+
+  if (!_parser_context_peek_error (context, &error, &error_pos))
+    return FALSE;
+
+  stack_data = _parser_context_peek (context, &rule);
+
+  if (rule->type != RULE_MULTI && rule->type != RULE_CONTAINER)
+    return FALSE;
+
+  if (stack_data->parent_type == RULE_OR ||
+      stack_data->parent_type == RULE_OPTIONAL)
+    return FALSE;
+
+  g_signal_emit (context->parser, signals[ERROR], 0, error, &retval);
+
+  if (!retval)
+    {
+      gchar *cur;
+
+      _parser_context_take_error (context, NULL, NULL);
+      _advance_till_delimiter (context, &cur, NULL, TRUE);
+      _parser_context_set_current (context, cur);
+    }
+
+  return retval;
+}
+
+static gboolean
 _parser_context_check_finished (MechParserContext *context)
 {
   ParserStackedRule *stack_data;
+  gboolean has_error;
+  ParserRule *rule;
+  gchar *error_pos;
 
-  stack_data = _parser_context_peek (context, NULL);
+  has_error = _parser_context_peek_error (context, NULL, &error_pos);
+  stack_data = _parser_context_peek (context, &rule);
 
   if (!stack_data->started)
     return FALSE;
+
+  if (rule->type == RULE_OR)
+    {
+      if (!has_error)
+        stack_data->finished = TRUE;
+      else
+        {
+          _parser_context_reset_current (context);
+          _parser_context_take_error (context, NULL, NULL);
+        }
+    }
+  else if (rule->type == RULE_MULTI)
+    {
+      if (rule->data.multi.max >= 0 &&
+          stack_data->n_iterations == rule->data.multi.max)
+        stack_data->finished = TRUE;
+      else if (has_error)
+        {
+          _parser_context_take_error (context, NULL, NULL);
+          stack_data->finished = TRUE;
+        }
+    }
+  else if (rule->type == RULE_OPTIONAL)
+    {
+      stack_data->finished = TRUE;
+
+      if (has_error)
+        {
+          _parser_context_reset_current (context);
+          _parser_context_take_error (context, NULL, NULL);
+        }
+    }
 
   return stack_data->finished;
 }
@@ -1182,6 +1472,12 @@ _parser_context_apply_current_rule (MechParserContext  *context)
   guint next_rule;
 
   current_rule = _parser_context_peek (context, &rule);
+
+  if (!current_rule->started)
+    {
+      /* First iteration into the rule */
+      _parser_context_enter_rule (context, rule);
+    }
 
   /* This function may unset the context error */
   finished = _parser_context_check_finished (context);
@@ -1204,10 +1500,12 @@ _parser_context_apply_current_rule (MechParserContext  *context)
       /* There has been an error, a last iteration
        * on the rule, or the rule is not a container
        */
+      _parser_context_leave_rule (context, rule);
+      fatal_error = _parser_context_check_emit_error (context);
       _parser_context_pop (context, NULL, retval, TRUE);
     }
 
-  return TRUE;
+  return (fatal_error == FALSE);
 }
 
 static gboolean
