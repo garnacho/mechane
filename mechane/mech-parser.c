@@ -41,7 +41,8 @@ enum _ParserRuleType {
   RULE_OR,
   RULE_MULTI,
   RULE_CONTAINER,
-  RULE_OPTIONAL
+  RULE_OPTIONAL,
+  RULE_CUSTOM
 };
 
 enum MechParserError {
@@ -78,6 +79,10 @@ struct _ParserRule
       gint min;
       gint max;
     } multi;
+
+    struct {
+      MechParserCustomFunc func;
+    } custom;
   } data;
 };
 
@@ -1169,6 +1174,25 @@ _mech_parser_rule_optional_create (MechParser *parser,
   return priv->rules->len;
 }
 
+guint
+_mech_parser_rule_custom_create (MechParser           *parser,
+                                 MechParserCustomFunc  func)
+{
+  MechParserPrivate *priv;
+  ParserRule rule = { 0 };
+
+  g_return_val_if_fail (MECH_IS_PARSER (parser), 0);
+  g_return_val_if_fail (func != NULL, 0);
+
+  priv = mech_parser_get_instance_private (parser);
+
+  rule.type = RULE_CUSTOM;
+  rule.data.custom.func = func;
+  g_array_append_val (priv->rules, rule);
+
+  return priv->rules->len;
+}
+
 void
 _mech_parser_set_root_rule (MechParser *parser,
                             guint       rule)
@@ -1360,6 +1384,10 @@ _parser_context_visit_rule (MechParserContext *context,
 
       if (!stack_data->finished && data->len > 0)
         g_ptr_array_remove_index (data, data->len - 1);
+      break;
+    case RULE_CUSTOM:
+      if ((retval = rule->data.custom.func (context->parser, context, &error)))
+        cur = _mech_parser_context_get_current (context);
       break;
     default:
       break;

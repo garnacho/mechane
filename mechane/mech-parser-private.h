@@ -46,6 +46,10 @@ typedef gboolean (* MechParserConvertFunc) (MechParser         *parser,
                                             GPtrArray          *members,
                                             GValue             *value,
                                             GError            **error);
+typedef gboolean (* MechParserCustomFunc)  (MechParser         *parser,
+                                            MechParserContext  *context,
+                                            GError            **error);
+
 struct _MechParser
 {
   GObject parent_instance;
@@ -125,6 +129,8 @@ guint    _mech_parser_rule_container_create (MechParser            *parser,
                                              guchar                 close_container);
 guint    _mech_parser_rule_optional_create  (MechParser            *parser,
                                              guint                  child);
+guint    _mech_parser_rule_custom_create    (MechParser            *parser,
+                                             MechParserCustomFunc   func);
 
 G_END_DECLS
 
