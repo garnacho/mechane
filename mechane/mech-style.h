@@ -48,4 +48,8 @@ GType          mech_style_get_type        (void) G_GNUC_CONST;
 
 MechStyle    * mech_style_new             (void);
 
+MechRenderer * mech_style_lookup_renderer (MechStyle      *style,
+                                           MechArea       *area,
+                                           MechStateFlags  state);
+
 #endif /* __MECH_STYLE_H__ */

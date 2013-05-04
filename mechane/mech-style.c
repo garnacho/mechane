@@ -22,6 +22,9 @@
 #include "mech-pattern-private.h"
 #include "mech-renderer-private.h"
 
+#define UNPACK_VALUE(value,type,def) \
+  (value) ? g_value_get_##type ((value)) : (def)
+
 typedef struct _MechStylePrivate MechStylePrivate;
 typedef struct _StyleIterator StyleIterator;
 typedef struct _StyleProperty StyleProperty;
@@ -378,6 +381,92 @@ _style_property_set_combine (StylePropertySet       *set,
     }
 }
 
+static gboolean
+_style_iterator_unpack (StyleIterator *iter,
+                        GValue        *value)
+{
+  StyleProperty *prop;
+
+  prop = _style_iterator_current (iter);
+
+  if (!prop)
+    return FALSE;
+
+  if (value)
+    *value = prop->value;
+
+  _style_iterator_next (iter);
+  return TRUE;
+}
+
+static gboolean
+_style_iterator_unpack_values (StyleIterator  *iter,
+                               GValue        **values_out,
+                               guint           n_values)
+{
+  guint flags = 0, set_values = 0, val, property;
+  StyleProperty *prop;
+  gint layer;
+
+  if (_style_iterator_finished (iter))
+    return FALSE;
+
+  _style_iterator_current_group (iter, &property, &layer, NULL);
+
+  while (!_style_iterator_finished (iter) &&
+         _style_iterator_check_group (iter, property, layer))
+    {
+      prop = _style_iterator_current (iter);
+      _style_iterator_next (iter);
+
+      flags = prop->flags & ~(set_values);
+      set_values |= flags;
+
+      if (flags == 0)
+        continue;
+
+      for (val = 0; val < n_values; val++)
+        {
+          if (flags & 1)
+            values_out[val] = &prop->value;
+
+          flags >>= 1;
+
+          if (flags == 0)
+            break;
+        }
+    }
+
+  return set_values != 0;
+}
+
+static void
+_style_iterator_unpack_border (StyleIterator *iter,
+                               MechBorder    *border)
+{
+  GValue *distances[4] = { 0 };
+  GValue *units[4] = { 0 };
+  guint cur_property;
+  gint cur_layer;
+
+  _style_iterator_current_group (iter, &cur_property, &cur_layer, NULL);
+  _style_iterator_unpack_values (iter, distances, 4);
+
+  if (_style_iterator_forward_position (iter, cur_property + 1, cur_layer))
+    {
+      _style_iterator_unpack_values (iter, units, 4);
+      border->left_unit = UNPACK_VALUE (units[MECH_SIDE_LEFT], enum, MECH_UNIT_PX);
+      border->right_unit = UNPACK_VALUE (units[MECH_SIDE_RIGHT], enum, MECH_UNIT_PX);
+      border->top_unit = UNPACK_VALUE (units[MECH_SIDE_TOP], enum, MECH_UNIT_PX);
+      border->bottom_unit = UNPACK_VALUE (units[MECH_SIDE_BOTTOM], enum, MECH_UNIT_PX);
+    }
+
+  border->left = UNPACK_VALUE (distances[MECH_SIDE_LEFT], double, 0);
+  border->right = UNPACK_VALUE (distances[MECH_SIDE_RIGHT], double, 0);
+  border->top = UNPACK_VALUE (distances[MECH_SIDE_TOP], double, 0);
+  border->bottom = UNPACK_VALUE (distances[MECH_SIDE_BOTTOM], double, 0);
+}
+
 static StyleTreeNode *
 _style_tree_node_new (GQuark         elem_quark,
                       guint          state_flags,
@@ -603,4 +692,129 @@ _mech_style_set_property (MechStyle *style,
   iter.set = _style_peek_context_properties (style);
   _style_iterator_forward_position (&iter, property, layer);
   _style_iterator_add (&iter, property, layer, flags, value);
+}
+
+static void
+_style_apply_current_property (StyleIterator *iter,
+                               MechRenderer  *renderer)
+{
+  MechBorder border = { 0, 0, 0, 0, 0 };
+  gint cur_layer, cur_flags;
+  guint cur_property;
+  MechPattern *pat;
+  GValue value;
+
+  _style_iterator_current_group (iter, &cur_property, &cur_layer, &cur_flags);
+
+  switch (cur_property)
+    {
+    case MECH_PROPERTY_MARGIN:
+      _style_iterator_unpack_border (iter, &border);
+      _mech_renderer_set_margin (renderer, &border);
+      break;
+    case MECH_PROPERTY_PADDING:
+      _style_iterator_unpack_border (iter, &border);
+      _mech_renderer_set_padding (renderer, &border);
+      break;
+    case MECH_PROPERTY_FONT:
+      _style_iterator_unpack (iter, &value);
+      _mech_renderer_set_font_family (renderer, g_value_get_string (&value));
+      break;
+    case MECH_PROPERTY_FONT_SIZE:
+      {
+        GValue size, unit;
+
+        _style_iterator_unpack (iter, &size);
+        _style_iterator_unpack (iter, &unit);
+        _mech_renderer_set_font_size (renderer, g_value_get_double (&size),
+                                      g_value_get_enum (&unit));
+        break;
+      }
+    case MECH_PROPERTY_CORNER_RADIUS:
+      _style_iterator_unpack (iter, &value);
+      _mech_renderer_set_corner_radius (renderer, cur_flags,
+                                        g_value_get_double (&value));
+      break;
+    case MECH_PROPERTY_BORDER:
+      _style_iterator_unpack_border (iter, &border);
+      _style_iterator_unpack (iter, &value);
+      pat = g_value_get_boxed (&value);
+      _mech_renderer_add_border (renderer, pat, &border);
+      break;
+    case MECH_PROPERTY_BACKGROUND_PATTERN:
+      _style_iterator_unpack (iter, &value);
+      pat = g_value_get_boxed (&value);
+      _mech_renderer_add_background (renderer, pat);
+      break;
+    case MECH_PROPERTY_FOREGROUND_PATTERN:
+      _style_iterator_unpack (iter, &value);
+      pat = g_value_get_boxed (&value);
+      _mech_renderer_add_foreground (renderer, pat);
+      break;
+    default:
+      _style_iterator_next (iter);
+      break;
+    }
+}
+
+static MechRenderer *
+_style_create_renderer (StylePropertySet *properties)
+{
+  StyleIterator iter = { properties, 0 };
+  MechRenderer *renderer;
+
+  renderer = _mech_renderer_new ();
+
+  while (!_style_iterator_finished (&iter))
+    _style_apply_current_property (&iter, renderer);
+
+  return renderer;
+}
+
+MechRenderer *
+mech_style_lookup_renderer (MechStyle      *style,
+                            MechArea       *area,
+                            MechStateFlags  state)
+{
+  gboolean first = TRUE, child_match = FALSE;
+  StyleTreeNode *node, *next;
+  MechStylePrivate *priv;
+  GQuark qname;
+
+  g_return_val_if_fail (MECH_IS_STYLE (style), NULL);
+  g_return_val_if_fail (MECH_IS_AREA (area), NULL);
+
+  priv = mech_style_get_instance_private (style);
+  node = priv->style_tree;
+
+  /* FIXME: Cache renderers */
+
+  while (area)
+    {
+      qname = mech_area_get_qname (area);
+      next = _find_child_node (node, qname, state, FALSE);
+
+      if (next)
+        node = next;
+      else if (first)
+        child_match = TRUE;
+
+      area = mech_area_get_parent (area);
+      first = FALSE;
+    }
+
+  _style_tree_node_ensure_resolved (node);
+
+  if (child_match && node->parent)
+    {
+      MechRenderer *renderer, *copy;
+
+      renderer = _style_create_renderer (node->properties);
+      copy = _mech_renderer_copy (renderer, MECH_RENDERER_COPY_FOREGROUND);
+      g_object_unref (renderer);
+
+      return copy;
+    }
+  else
+    return _style_create_renderer (node->properties);
 }
