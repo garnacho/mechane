@@ -14,14 +14,25 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library. If not, see <http://www.gnu.org/licenses/>.
  */
+/*
+ * Format conversion from pixbuf to cairo surface taken from GTK+,
+ * licensed under the same terms.
+ */
 
 #include <librsvg/rsvg.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include "mech-pattern-private.h"
 
+#define MULTIPLY_CHANNEL(v,c,a) G_STMT_START {  \
+    guint t = c * a + 0x7f;                     \
+    v = ((t >> 8) + t) >> 8;                    \
+  } G_STMT_END
+
+
 enum {
   TYPE_PATTERN,
-  TYPE_ASSET_SVG
+  TYPE_ASSET_SVG,
+  TYPE_ASSET_PIXBUF
 };
 
 typedef struct _AssetCacheData AssetCacheData;
@@ -43,6 +54,10 @@ struct _MechPattern
       gchar *layer;
       AssetCacheData cache_data;
     } svg;
+
+    struct {
+      GdkPixbuf *pixbuf;
+    } pixbuf;
   };
 
   gdouble width;
@@ -103,6 +118,67 @@ _mech_pattern_render_asset (MechPattern *pattern,
 
       cairo_destroy (cr);
     }
+  else if (pattern->type == TYPE_ASSET_PIXBUF && pattern->pixbuf.pixbuf)
+    {
+      gint width, height, stride, n_channels, pixbuf_rowstride;
+      static const cairo_user_data_key_t key;
+      guchar *surface_data, *pixbuf_data;
+      cairo_format_t format;
+
+      if (gdk_pixbuf_get_has_alpha (pattern->pixbuf.pixbuf))
+        format = CAIRO_FORMAT_ARGB32;
+      else
+        format = CAIRO_FORMAT_RGB24;
+
+      width = gdk_pixbuf_get_width (pattern->pixbuf.pixbuf);
+      height = gdk_pixbuf_get_height (pattern->pixbuf.pixbuf);
+      n_channels = gdk_pixbuf_get_n_channels (pattern->pixbuf.pixbuf);
+      pixbuf_rowstride = gdk_pixbuf_get_rowstride (pattern->pixbuf.pixbuf);
+      pixbuf_data = gdk_pixbuf_get_pixels (pattern->pixbuf.pixbuf);
+
+      stride = cairo_format_stride_for_width (format, width);
+      surface_data = g_malloc0 (stride * height);
+      surface = cairo_image_surface_create_for_data (surface_data, format,
+                                                     width, height,
+                                                     stride);
+      cairo_surface_set_user_data (surface, &key, surface_data,
+                                   (cairo_destroy_func_t) g_free);
+
+      while (height > 0)
+        {
+          guchar *p = pixbuf_data, *c = surface_data, *end;
+
+          end = p + (n_channels * width);
+
+          while (p < end)
+            {
+              guchar alpha;
+
+              if (n_channels == 3)
+                alpha = 0xff;
+              else
+                alpha = p[3];
+
+#if G_BYTE_ORDER == G_LITTLE_ENDIAN
+              MULTIPLY_CHANNEL (c[0], p[2], alpha);
+              MULTIPLY_CHANNEL (c[1], p[1], alpha);
+              MULTIPLY_CHANNEL (c[2], p[0], alpha);
+              c[3] = alpha;
+#else /* Big endian */
+              c[0] = alpha;
+              MULTIPLY_CHANNEL (c[1], p[0], alpha);
+              MULTIPLY_CHANNEL (c[2], p[1], alpha);
+              MULTIPLY_CHANNEL (c[3], p[2], alpha);
+#endif
+              p += n_channels;
+              c += 4;
+            }
+
+          pixbuf_data += pixbuf_rowstride;
+          surface_data += stride;
+          height--;
+        }
+    }
 
   if (surface)
     {
@@ -144,6 +220,40 @@ _mech_pattern_new_svg_asset (GFile           *file,
   return pattern;
 }
 
+static MechPattern *
+_mech_pattern_new_pixbuf_asset (GFile           *file,
+                                cairo_extend_t   extend,
+                                GError         **error)
+{
+  GFileInputStream *stream;
+  MechPattern *pattern;
+  GdkPixbuf *pixbuf;
+
+  stream = g_file_read (file, NULL, error);
+
+  if (!stream)
+    return NULL;
+
+  pixbuf = gdk_pixbuf_new_from_stream (G_INPUT_STREAM (stream), NULL, error);
+  g_object_unref (stream);
+
+  if (!pixbuf)
+    return NULL;
+
+  pattern = g_new0 (MechPattern, 1);
+  pattern->pixbuf.pixbuf = pixbuf;
+  pattern->type = TYPE_ASSET_PIXBUF;
+  pattern->ref_count = 1;
+
+  pattern->pattern = _mech_pattern_render_asset (pattern, 1, 1);
+  cairo_pattern_set_extend (pattern->pattern, extend);
+  _mech_pattern_set_size (pattern,
+                          gdk_pixbuf_get_width (pixbuf), MECH_UNIT_PX,
+                          gdk_pixbuf_get_height (pixbuf), MECH_UNIT_PX);
+
+  return pattern;
+}
+
 MechPattern *
 _mech_pattern_new_asset (GFile          *file,
                          const gchar    *layer,
@@ -154,7 +264,13 @@ _mech_pattern_new_asset (GFile          *file,
   gchar *uri;
 
   uri = g_file_get_uri (file);
-  pattern = _mech_pattern_new_svg_asset (file, layer, extend, &error);
+
+  /* FIXME: a poor man's check */
+  if (g_str_has_suffix (uri, ".svg"))
+    pattern = _mech_pattern_new_svg_asset (file, layer, extend, &error);
+  else
+    pattern = _mech_pattern_new_pixbuf_asset (file, extend, &error);
+
   g_free (uri);
 
   if (error)
@@ -205,7 +321,8 @@ _mech_pattern_set_source (MechPattern             *pattern,
 
   cairo_matrix_init_translate (&matrix, -rect->x, -rect->y);
 
-  if (pattern->type == TYPE_ASSET_SVG)
+  if (pattern->type == TYPE_ASSET_SVG ||
+      pattern->type == TYPE_ASSET_PIXBUF)
     {
       scale_x = scale_y = 1;
       cairo_user_to_device_distance (cr, &scale_x, &scale_y);
@@ -215,6 +332,8 @@ _mech_pattern_set_source (MechPattern             *pattern,
           pat = _mech_pattern_ensure_size_cached (pattern, scale_x, scale_y);
           cairo_matrix_scale (&matrix, scale_x, scale_y);
         }
+      else if (pattern->type == TYPE_ASSET_PIXBUF && pattern->pixbuf.pixbuf)
+        pat = pattern->pattern;
     }
   else
     pat = pattern->pattern;
@@ -281,6 +400,11 @@ _mech_pattern_dispose (MechPattern *pattern)
         g_object_unref (pattern->svg.asset);
       if (pattern->svg.cache_data.pattern)
         cairo_pattern_destroy (pattern->svg.cache_data.pattern);
+    }
+  else if (pattern->type == TYPE_ASSET_PIXBUF)
+    {
+      if (pattern->pixbuf.pixbuf)
+        g_object_unref (pattern->pixbuf.pixbuf);
     }
 }
 
