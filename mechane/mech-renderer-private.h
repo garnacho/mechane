@@ -55,6 +55,10 @@ void           _mech_renderer_set_padding            (MechRenderer          *ren
                                                       MechBorder            *border);
 void           _mech_renderer_set_margin             (MechRenderer          *renderer,
                                                       MechBorder            *border);
+void           _mech_renderer_get_minimal_pixel_size (MechRenderer          *renderer,
+                                                      MechArea              *area,
+                                                      guint                 *width,
+                                                      guint                 *height);
 
 G_END_DECLS
 

@@ -656,3 +656,46 @@ mech_renderer_get_border_extents (MechRenderer   *renderer,
 
   *border = accum;
 }
+
+void
+_mech_renderer_get_minimal_pixel_size (MechRenderer *renderer,
+                                       MechArea     *area,
+                                       guint        *width,
+                                       guint        *height)
+{
+  MechRendererPrivate *priv;
+  guint i;
+
+  g_return_if_fail (MECH_IS_RENDERER (renderer));
+  g_return_if_fail (MECH_IS_AREA (area));
+  g_return_if_fail (width != NULL && height != NULL);
+
+  priv = mech_renderer_get_instance_private (renderer);
+  *width = *height = 0;
+
+  for (i = 0; i < priv->backgrounds->len; i++)
+    {
+      MechUnit bg_width_unit, bg_height_unit;
+      gdouble bg_width, bg_height;
+      MechPattern *pattern;
+      gdouble value;
+
+      pattern = g_array_index (priv->backgrounds, MechPattern *, i);
+      _mech_pattern_get_size (pattern, &bg_width, &bg_width_unit,
+                              &bg_height, &bg_height_unit);
+
+      if (bg_width_unit != MECH_UNIT_PERCENTAGE && bg_width >= 0)
+        {
+          value = mech_area_translate_unit (area, bg_width, bg_width_unit,
+                                            MECH_UNIT_PX, MECH_AXIS_X);
+          *width = MAX (*width, value);
+        }
+
+      if (bg_width_unit != MECH_UNIT_PERCENTAGE && bg_height >= 0)
+        {
+          value = mech_area_translate_unit (area, bg_height, bg_height_unit,
+                                            MECH_UNIT_PX, MECH_AXIS_Y);
+          *height = MAX (*height, value);
+        }
+    }
+}

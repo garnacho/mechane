@@ -26,6 +26,7 @@ typedef struct _MechArea MechArea;
 #include <mechane/mech-window.h>
 #include <mechane/mech-types.h>
 #include <mechane/mech-events.h>
+#include <mechane/mech-renderer.h>
 
 G_BEGIN_DECLS
 
@@ -107,6 +108,7 @@ void             mech_area_set_parent           (MechArea       *area,
 						 MechArea       *parent);
 
 MechWindow     * mech_area_get_window           (MechArea       *area);
+MechRenderer   * mech_area_get_renderer         (MechArea       *area);
 
 void             mech_area_set_clip             (MechArea        *area,
                                                  gboolean         clip);

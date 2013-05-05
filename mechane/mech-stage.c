@@ -23,6 +23,7 @@
 #include <mechane/mech-area-private.h>
 #include <mechane/mech-marshal.h>
 #include <mechane/mech-surface-private.h>
+#include <mechane/mech-renderer.h>
 #include <mechane/mech-enums.h>
 #include <mechane/mech-events.h>
 
@@ -428,6 +429,21 @@ render_stage_leave (MechStage          *stage,
       cairo_paint (target->cr);
     }
 
+  if (render_stage_context_area_overlaps_clip (context, stage, area))
+    {
+      MechRenderer *renderer;
+      MechBorder border;
+
+      _mech_area_get_stage_rect (area, &rect);
+      renderer = mech_area_get_renderer (area);
+      mech_renderer_get_border_extents (renderer, MECH_EXTENT_BORDER, &border);
+
+      mech_renderer_render_border (renderer, target->cr,
+                                   border.left, border.top,
+                                   rect.width - (border.left + border.right),
+                                   rect.height - (border.top + border.bottom));
+    }
+
   cairo_restore (target->cr);
 }
 
@@ -438,16 +454,30 @@ render_stage_visit (MechStage          *stage,
 {
   MechArea *area = node->data;
   RenderingTarget *target;
+  MechRenderer *renderer;
   cairo_rectangle_t rect;
   MechStagePrivate *priv;
+  MechBorder border;
 
   priv = mech_stage_get_instance_private (stage);
   target = render_stage_context_lookup_target (context);
   _mech_area_get_stage_rect (area, &rect);
 
+  renderer = mech_area_get_renderer (area);
+  mech_renderer_get_border_extents (renderer, MECH_EXTENT_PADDING, &border);
+
+  mech_renderer_render_background (renderer, target->cr,
+                                   border.left, border.top,
+                                   rect.width - (border.left + border.right),
+                                   rect.height - (border.top + border.bottom));
+
   if (mech_area_get_clip (area))
     {
-      cairo_rectangle (target->cr, 0, 0, rect.width, rect.height);
+      mech_renderer_get_border_extents (renderer, MECH_EXTENT_BORDER, &border);
+      mech_renderer_set_border_path (renderer, target->cr,
+                                     border.left, border.top,
+                                     rect.width - (border.left + border.right),
+                                     rect.height - (border.top + border.bottom));
       cairo_clip (target->cr);
     }
 
@@ -455,6 +485,8 @@ render_stage_visit (MechStage          *stage,
     priv->draw_signal_id = g_signal_lookup ("draw", MECH_TYPE_AREA);
 
   cairo_save (target->cr);
+  mech_renderer_get_border_extents (renderer, MECH_EXTENT_CONTENT, &border);
+  cairo_translate (target->cr, border.left, border.top);
   g_signal_emit (area, priv->draw_signal_id, 0, target->cr);
   cairo_restore (target->cr);
 

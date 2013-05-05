@@ -21,6 +21,7 @@
 
 #include <mechane/mech-marshal.h>
 #include <mechane/mech-stage-private.h>
+#include <mechane/mech-renderer-private.h>
 #include <mechane/mech-window-private.h>
 #include <mechane/mech-area-private.h>
 #include <mechane/mech-enum-types.h>
@@ -77,7 +78,11 @@ struct _MechAreaPrivate
   cairo_matrix_t matrix;
   GQuark name;
 
-  /* In stage coordinates, not affected by matrix. */
+  MechRenderer *renderer;
+
+  /* In stage coordinates, counting borders,
+   * not affected by matrix.
+   */
   cairo_rectangle_t rect;
 
   /* Index is MechAxis */
@@ -120,6 +125,29 @@ mech_area_init (MechArea *area)
   priv->rect.width = priv->rect.height = 0;
   priv->need_width_request = priv->need_height_request = TRUE;
   priv->need_allocate_size = TRUE;
+}
+
+MechRenderer *
+mech_area_get_renderer (MechArea *area)
+{
+  MechAreaPrivate *priv = mech_area_get_instance_private (area);
+
+  if (!priv->renderer)
+    {
+      MechWindow *window;
+      MechStyle *style;
+
+      window = mech_area_get_window (area);
+
+      if (!window)
+        return NULL;
+
+      style = mech_window_get_style (window);
+      priv->renderer = mech_style_lookup_renderer (style, area,
+                                                   mech_area_get_state (area));
+    }
+
+  return priv->renderer;
 }
 
 static gboolean
@@ -256,6 +284,9 @@ static void
 mech_area_finalize (GObject *object)
 {
   MechAreaPrivate *priv = mech_area_get_instance_private ((MechArea *) object);
+
+  if (priv->renderer)
+    g_object_unref (priv->renderer);
 
   g_ptr_array_unref (priv->children);
   _mech_stage_node_free (priv->node);
@@ -469,6 +500,47 @@ mech_area_get_extents (MechArea          *area,
   extents->height = ceil (MAX (MAX (tl.y, tr.y), MAX (bl.y, br.y)) - extents->y);
 }
 
+static void
+_mech_area_border_axis_extents (MechArea *area,
+                                MechAxis  axis,
+                                gdouble  *first,
+                                gdouble  *second)
+{
+  MechRenderer *renderer;
+  MechBorder border;
+
+  renderer = mech_area_get_renderer (area);
+  mech_renderer_get_border_extents (renderer, MECH_EXTENT_CONTENT, &border);
+
+  if (axis == MECH_AXIS_X)
+    {
+      if (first)
+        *first = border.left;
+      if (second)
+        *second = border.right;
+    }
+  else if (axis == MECH_AXIS_Y)
+    {
+      if (first)
+        *first = border.left;
+      if (second)
+        *second = border.right;
+    }
+}
+
+static guint
+_mech_area_box_minimal_size (MechArea *area,
+                             MechAxis  axis)
+{
+  MechRenderer *renderer;
+  guint width, height;
+
+  renderer = mech_area_get_renderer (area);
+  _mech_renderer_get_minimal_pixel_size (renderer, area, &width, &height);
+
+  return (axis == MECH_AXIS_X) ? width : height;
+}
+
 gdouble
 mech_area_get_extent (MechArea *area,
                       MechAxis  axis)
@@ -487,8 +559,13 @@ mech_area_get_extent (MechArea *area,
       (axis == MECH_AXIS_Y && priv->need_height_request))
     {
       gdouble val, preferred;
+      gdouble first, second;
 
       val = MECH_AREA_GET_CLASS (area)->get_extent (area, axis);
+      val = MAX (val, _mech_area_box_minimal_size (area, axis));
+
+      _mech_area_border_axis_extents (area, axis, &first, &second);
+      val += first + second;
 
       if (mech_area_get_preferred_size (area, axis, MECH_UNIT_PX, &preferred))
         val = MAX (val, preferred);
@@ -527,9 +604,19 @@ mech_area_get_second_extent (MechArea *area,
       (axis == MECH_AXIS_Y && priv->need_height_request))
     {
       gdouble val, preferred;
+      gdouble first, second;
+      MechAxis other_axis;
+
+      other_axis = (axis == MECH_AXIS_X) ? MECH_AXIS_Y : MECH_AXIS_X;
+      _mech_area_border_axis_extents (area, other_axis, &first, &second);
+      other_value -= first + second;
 
       val = MECH_AREA_GET_CLASS (area)->get_second_extent (area, axis,
                                                            other_value);
+      val = MAX (val, _mech_area_box_minimal_size (area, axis));
+
+      _mech_area_border_axis_extents (area, axis, &first, &second);
+      val += first + second;
 
       if (mech_area_get_preferred_size (area, axis, MECH_UNIT_PX, &preferred))
         val = MAX (val, preferred);
@@ -574,12 +661,19 @@ _mech_area_allocate_stage_rect (MechArea          *area,
       priv->rect.width != alloc->width ||
       priv->rect.height != alloc->height)
     {
+      MechRenderer *renderer;
+      MechBorder border = { 0 };
+
+      renderer = mech_area_get_renderer (area);
       priv->need_allocate_size = FALSE;
       priv->rect = *alloc;
 
+      if (renderer)
+        mech_renderer_get_border_extents (renderer, MECH_EXTENT_CONTENT, &border);
+
       MECH_AREA_GET_CLASS (area)->allocate_size (area,
-                                                 alloc->width,
-                                                 alloc->height);
+                                                 alloc->width - (border.left + border.right),
+                                                 alloc->height - (border.top + border.bottom));
     }
   else if (priv->rect.x != alloc->x ||
            priv->rect.y != alloc->y)
@@ -610,6 +704,8 @@ _mech_area_parent_to_stage (MechArea *area,
                             gdouble  *x,
                             gdouble  *y)
 {
+  MechBorder border = { 0 };
+  MechRenderer *renderer;
   cairo_rectangle_t rect;
   GNode *parent;
 
@@ -619,8 +715,11 @@ _mech_area_parent_to_stage (MechArea *area,
     return;
 
   _mech_area_get_stage_rect (parent->data, &rect);
-  *x += rect.x;
-  *y += rect.y;
+  renderer = mech_area_get_renderer (parent->data);
+  mech_renderer_get_border_extents (renderer, MECH_EXTENT_CONTENT, &border);
+
+  *x += rect.x + border.left;
+  *y += rect.y + border.top;
 }
 
 static void
@@ -628,6 +727,8 @@ _mech_area_stage_to_parent (MechArea *area,
                             gdouble  *x,
                             gdouble  *y)
 {
+  MechBorder border = { 0 };
+  MechRenderer *renderer;
   cairo_rectangle_t rect;
   GNode *parent;
 
@@ -637,8 +738,13 @@ _mech_area_stage_to_parent (MechArea *area,
     return;
 
   _mech_area_get_stage_rect (parent->data, &rect);
-  *x -= rect.x;
-  *y -= rect.y;
+  renderer = mech_area_get_renderer (parent->data);
+
+  if (renderer)
+    mech_renderer_get_border_extents (renderer, MECH_EXTENT_CONTENT, &border);
+
+  *x -= rect.x + border.left;
+  *y -= rect.y + border.top;
 }
 
 void
@@ -1387,6 +1493,8 @@ mech_area_set_state_flags (MechArea       *area,
 
   priv = mech_area_get_instance_private (area);
   priv->state |= state;
+
+  g_clear_object (&priv->renderer);
   mech_area_redraw (area, NULL);
 }
 
@@ -1400,6 +1508,8 @@ mech_area_unset_state_flags (MechArea       *area,
 
   priv = mech_area_get_instance_private (area);
   priv->state &= ~(state);
+
+  g_clear_object (&priv->renderer);
   mech_area_redraw (area, NULL);
 }
 
@@ -1691,19 +1801,18 @@ _unit_to_px (MechArea *area,
       break;
     case MECH_UNIT_EM:
       {
-        PangoFontMap *font_map;
+        MechRenderer *renderer;
         PangoContext *context;
         gdouble resolution;
 
-        font_map = pango_cairo_font_map_get_default ();
-        context = pango_font_map_create_context (font_map);
+        renderer = mech_area_get_renderer (area);
+        context = mech_renderer_get_font_context (renderer);
         resolution = pango_cairo_context_get_resolution (context);
 
         if (resolution < 0)
           resolution = DEFAULT_DPI;
 
         pixels = value * (resolution / POINTS_PER_INCH);
-        g_object_unref (context);
         break;
       }
     case MECH_UNIT_IN:
@@ -1762,19 +1871,18 @@ _px_to_unit (MechArea *area,
       break;
     case MECH_UNIT_EM:
       {
-        PangoFontMap *font_map;
+        MechRenderer *renderer;
         PangoContext *context;
         gdouble resolution;
 
-        font_map = pango_cairo_font_map_get_default ();
-        context = pango_font_map_create_context (font_map);
+        renderer = mech_area_get_renderer (area);
+        context = mech_renderer_get_font_context (renderer);
         resolution = pango_cairo_context_get_resolution (context);
 
         if (resolution < 0)
           resolution = DEFAULT_DPI;
 
         value = pixels * (POINTS_PER_INCH / resolution);
-        g_object_unref (font_map);
         break;
       }
     case MECH_UNIT_IN:
@@ -1852,6 +1960,7 @@ mech_area_set_name (MechArea *area,
 
   priv = mech_area_get_instance_private (area);
   priv->name = (name) ? g_quark_from_string (name) : 0;
+  g_clear_object (&priv->renderer);
 }
 
 const gchar *
