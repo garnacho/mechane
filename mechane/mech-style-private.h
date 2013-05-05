@@ -42,6 +42,23 @@ typedef enum {
   MECH_PROPERTY_LAST
 } MechStyleProperty;
 
+/* Property information */
+const MechPropertyInfo *
+               _mech_style_property_info_lookup            (const MechPropertyInfo   *parent,
+                                                            const gchar              *name);
+gboolean       _mech_style_property_info_is_layered        (const MechPropertyInfo   *info);
+gboolean       _mech_style_property_info_is_associative    (const MechPropertyInfo   *info,
+                                                            GType                    *type,
+                                                            gint                     *default_key);
+gboolean       _mech_style_property_info_get_subproperties (const MechPropertyInfo   *info,
+                                                            MechPropertyInfo       ***children,
+                                                            guint                    *n_children);
+GType          _mech_style_property_info_get_property_type (const MechPropertyInfo   *info);
+MechStyleProperty
+               _mech_style_property_info_get_id            (const MechPropertyInfo   *info);
+
+
+/* Style setters */
 void           _mech_style_push_path    (MechStyle      *style,
                                          const gchar    *element,
                                          MechStateFlags  state);

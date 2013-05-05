@@ -35,6 +35,29 @@ typedef struct _PathContext PathContext;
 static GArray *registered_properties = NULL;
 static GHashTable *toplevel_properties = NULL;
 
+struct _MechPropertyInfo
+{
+  const gchar *name;
+
+  union {
+    struct {
+      guint property;
+      GType type;
+    } base;
+
+    struct {
+      GArray *children;
+    } shorthand;
+  } data;
+
+  GType key_type;
+  gint default_key;
+  guint is_shorthand   : 1;
+  guint is_associative : 1;
+
+  guint is_layered : 1;
+};
+
 struct _StyleProperty
 {
   guint32 property;
@@ -82,6 +105,284 @@ static void _style_property_set_free (StylePropertySet *set);
 
 G_DEFINE_TYPE_WITH_PRIVATE (MechStyle, mech_style, G_TYPE_OBJECT)
 
+static guint
+_mech_style_property_info_register (MechStyleProperty  property,
+                                    const gchar       *name,
+                                    GType              type)
+{
+  MechPropertyInfo *info;
+
+  info = &g_array_index (registered_properties, MechPropertyInfo, property);
+
+  info->name = name;
+  info->data.base.property = property;
+  info->data.base.type = type;
+
+  return property;
+}
+
+static guint
+_mech_style_property_info_register_shorthand (const gchar *name,
+                                              ...)
+{
+  MechPropertyInfo *child, info = { 0 };
+  va_list varargs;
+  GArray *arr;
+  guint prop;
+
+  info.name = name;
+  info.is_shorthand = TRUE;
+  info.data.shorthand.children = arr =
+    g_array_new (FALSE, FALSE, sizeof (MechPropertyInfo *));
+
+  va_start (varargs, name);
+
+  while ((prop = va_arg (varargs, gint)) != 0)
+    {
+      child = &g_array_index (registered_properties, MechPropertyInfo, prop);
+      g_array_append_val (arr, child);
+    }
+
+  g_array_append_val (registered_properties, info);
+  va_end (varargs);
+
+  return registered_properties->len - 1;
+}
+
+static void
+_mech_style_property_info_make_layered (guint registered_property)
+{
+  MechPropertyInfo *info;
+
+  info = &g_array_index (registered_properties, MechPropertyInfo,
+                         registered_property);
+  info->is_layered = TRUE;
+}
+
+static void
+_mech_style_property_info_make_associative (guint registered_property,
+                                            GType key_type,
+                                            gint  default_key)
+{
+  MechPropertyInfo *info;
+
+  info = &g_array_index (registered_properties, MechPropertyInfo,
+                         registered_property);
+  info->is_associative = TRUE;
+  info->default_key = default_key;
+  info->key_type = key_type;
+}
+
+static void
+_mech_style_property_info_make_toplevel (guint registered_property)
+{
+  MechPropertyInfo *info;
+
+  info = &g_array_index (registered_properties, MechPropertyInfo,
+                         registered_property);
+  g_hash_table_insert (toplevel_properties, (gpointer) info->name, info);
+}
+
+static void
+mech_style_info_init (void)
+{
+  static gpointer initialized = NULL;
+
+  if (g_once_init_enter (&initialized))
+    {
+      guint margin_shorthand, padding_shorthand;
+      guint font_size_shorthand, font_shorthand;
+      guint border_width_shorthand, border_shorthand;
+      guint corner_radius_shorthand;
+
+      toplevel_properties = g_hash_table_new (g_str_hash, g_str_equal);
+      registered_properties = g_array_new (FALSE, TRUE,
+                                           sizeof (MechPropertyInfo));
+      g_array_set_size (registered_properties, MECH_PROPERTY_LAST);
+
+      /* margin */
+      _mech_style_property_info_register (MECH_PROPERTY_MARGIN,
+                                          NULL, G_TYPE_DOUBLE);
+      _mech_style_property_info_register (MECH_PROPERTY_MARGIN_UNIT,
+                                          NULL, MECH_TYPE_UNIT);
+      margin_shorthand =
+        _mech_style_property_info_register_shorthand ("margin",
+                                                      MECH_PROPERTY_MARGIN,
+                                                      MECH_PROPERTY_MARGIN_UNIT,
+                                                      0);
+      _mech_style_property_info_make_associative (margin_shorthand,
+                                                  MECH_TYPE_SIDE_FLAGS,
+                                                  MECH_SIDE_FLAG_ALL);
+      _mech_style_property_info_make_toplevel (margin_shorthand);
+
+      /* padding */
+      _mech_style_property_info_register (MECH_PROPERTY_PADDING,
+                                          NULL, G_TYPE_DOUBLE);
+      _mech_style_property_info_register (MECH_PROPERTY_PADDING_UNIT,
+                                          NULL, MECH_TYPE_UNIT);
+      padding_shorthand =
+        _mech_style_property_info_register_shorthand ("padding",
+                                                      MECH_PROPERTY_PADDING,
+                                                      MECH_PROPERTY_PADDING_UNIT,
+                                                      0);
+      _mech_style_property_info_make_associative (padding_shorthand,
+                                                  MECH_TYPE_SIDE_FLAGS,
+                                                  MECH_SIDE_FLAG_ALL);
+      _mech_style_property_info_make_toplevel (padding_shorthand);
+
+      /* font */
+      _mech_style_property_info_register (MECH_PROPERTY_FONT,
+                                          "name", G_TYPE_STRING);
+      _mech_style_property_info_register (MECH_PROPERTY_FONT_SIZE,
+                                          NULL, G_TYPE_DOUBLE);
+      _mech_style_property_info_register (MECH_PROPERTY_FONT_SIZE_UNIT,
+                                          NULL, MECH_TYPE_UNIT);
+      font_size_shorthand =
+        _mech_style_property_info_register_shorthand ("size",
+                                                      MECH_PROPERTY_FONT_SIZE,
+                                                      MECH_PROPERTY_FONT_SIZE_UNIT,
+                                                      0);
+
+      font_shorthand =
+        _mech_style_property_info_register_shorthand ("font",
+                                                      MECH_PROPERTY_FONT,
+                                                      font_size_shorthand,
+                                                      0);
+      _mech_style_property_info_make_toplevel (font_shorthand);
+
+      /* corner radius */
+      _mech_style_property_info_register (MECH_PROPERTY_CORNER_RADIUS,
+                                          NULL, G_TYPE_DOUBLE);
+      _mech_style_property_info_register (MECH_PROPERTY_CORNER_RADIUS_UNIT,
+                                          NULL, MECH_TYPE_UNIT);
+      corner_radius_shorthand =
+        _mech_style_property_info_register_shorthand ("corner-radius",
+                                                      MECH_PROPERTY_CORNER_RADIUS,
+                                                      MECH_PROPERTY_CORNER_RADIUS_UNIT,
+                                                      0);
+      _mech_style_property_info_make_associative (corner_radius_shorthand,
+                                                  MECH_TYPE_SIDE_FLAGS,
+                                                  MECH_SIDE_FLAG_ALL);
+      _mech_style_property_info_make_toplevel (corner_radius_shorthand);
+
+      /* background */
+      _mech_style_property_info_register (MECH_PROPERTY_BACKGROUND_PATTERN,
+                                          "background", MECH_TYPE_PATTERN);
+      _mech_style_property_info_make_layered (MECH_PROPERTY_BACKGROUND_PATTERN);
+      _mech_style_property_info_make_toplevel (MECH_PROPERTY_BACKGROUND_PATTERN);
+
+      /* foreground */
+      _mech_style_property_info_register (MECH_PROPERTY_FOREGROUND_PATTERN,
+                                          "foreground", MECH_TYPE_PATTERN);
+      _mech_style_property_info_make_layered (MECH_PROPERTY_FOREGROUND_PATTERN);
+      _mech_style_property_info_make_toplevel (MECH_PROPERTY_FOREGROUND_PATTERN);
+
+      /* border */
+      _mech_style_property_info_register (MECH_PROPERTY_BORDER_PATTERN,
+                                          "source", MECH_TYPE_PATTERN);
+      _mech_style_property_info_register (MECH_PROPERTY_BORDER,
+                                          NULL, G_TYPE_DOUBLE);
+      _mech_style_property_info_register (MECH_PROPERTY_BORDER_UNIT,
+                                          NULL, MECH_TYPE_UNIT);
+      border_width_shorthand =
+        _mech_style_property_info_register_shorthand ("width",
+                                                      MECH_PROPERTY_BORDER,
+                                                      MECH_PROPERTY_BORDER_UNIT,
+                                                      0);
+      _mech_style_property_info_make_associative (border_width_shorthand,
+                                                  MECH_TYPE_SIDE_FLAGS,
+                                                  MECH_SIDE_FLAG_ALL);
+
+      border_shorthand =
+        _mech_style_property_info_register_shorthand ("border",
+                                                      MECH_PROPERTY_BORDER_PATTERN,
+                                                      border_width_shorthand,
+                                                      0);
+      _mech_style_property_info_make_layered (border_shorthand);
+      _mech_style_property_info_make_toplevel (border_shorthand);
+
+      g_once_init_leave (&initialized, registered_properties);
+    }
+}
+
+/* Property lookup */
+const MechPropertyInfo *
+_mech_style_property_info_lookup (const MechPropertyInfo *parent,
+                                  const gchar            *name)
+{
+  guint i;
+
+  if (!parent)
+    return g_hash_table_lookup (toplevel_properties, name);
+  else if (!parent->is_shorthand)
+    return NULL;
+
+  for (i = 0; i < parent->data.shorthand.children->len; i++)
+    {
+      MechPropertyInfo *child;
+
+      child = g_array_index (parent->data.shorthand.children,
+                             MechPropertyInfo *, i);
+
+      if (g_strcmp0 (name, child->name) == 0)
+        return child;
+    }
+
+  return NULL;
+}
+
+gboolean
+_mech_style_property_info_is_layered (const MechPropertyInfo *info)
+{
+  return info->is_layered;
+}
+
+gboolean
+_mech_style_property_info_is_associative (const MechPropertyInfo *info,
+                                          GType                  *key_type,
+                                          gint                   *default_key)
+{
+  if (!info->is_associative)
+    return FALSE;
+
+  *key_type = info->key_type;
+  *default_key = info->default_key;
+
+  return TRUE;
+}
+
+gboolean
+_mech_style_property_info_get_subproperties (const MechPropertyInfo   *info,
+                                             MechPropertyInfo       ***children,
+                                             guint                    *n_children)
+{
+  if (!info->is_shorthand)
+    return FALSE;
+
+  *children = (MechPropertyInfo **) info->data.shorthand.children->data;
+  *n_children = info->data.shorthand.children->len;
+  return TRUE;
+}
+
+GType
+_mech_style_property_info_get_property_type (const MechPropertyInfo *info)
+{
+  if (info->is_shorthand)
+    return G_TYPE_NONE;
+
+  return info->data.base.type;
+}
+
+MechStyleProperty
+_mech_style_property_info_get_id (const MechPropertyInfo *info)
+{
+  if (info->is_shorthand)
+    return 0;
+
+  return info->data.base.property;
+}
+
+/* Style object */
 static void
 mech_style_finalize (GObject *object)
 {
@@ -110,6 +411,8 @@ mech_style_class_init (MechStyleClass *klass)
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
   object_class->finalize = mech_style_finalize;
+
+  mech_style_info_init ();
 }
 
 static StylePropertySet *
