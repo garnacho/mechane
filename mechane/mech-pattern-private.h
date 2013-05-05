@@ -19,6 +19,7 @@
 #define __MECH_PATTERN_PRIVATE_H__
 
 #include <glib-object.h>
+#include <gio/gio.h>
 #include <cairo.h>
 #include <mechane/mech-enums.h>
 
@@ -31,6 +32,9 @@ typedef struct _MechPattern MechPattern;
 GType         _mech_pattern_get_type    (void) G_GNUC_CONST;
 
 MechPattern * _mech_pattern_new         (cairo_pattern_t         *pattern);
+MechPattern * _mech_pattern_new_asset   (GFile                   *file,
+                                         const gchar             *layer,
+                                         cairo_extend_t           extend);
 
 void          _mech_pattern_set_size    (MechPattern             *pattern,
                                          gdouble                  width,

@@ -28,6 +28,7 @@ AM_SILENT_RULES([yes])
 GLIB_VERSION=2.37.4
 CAIRO_VERSION=1.10
 PANGO_VERSION=1.28
+LIBRSVG_VERSION=2.36
 WAYLAND_VERSION=1.0
 XKB_COMMON_VERSION=0.2
 
@@ -70,6 +71,7 @@ PKG_CHECK_MODULES(MECH_DEPS, [
         cairo-gobject >= $CAIRO_VERSION
         pango >= $PANGO_VERSION
         pangocairo >= $PANGO_VERSION
+        librsvg-2.0 >= $LIBRSVG_VERSION
         ])
 
 # wayland deps
