@@ -53,7 +53,8 @@ enum {
   PROP_VISIBLE,
   PROP_DEPTH,
   PROP_NAME,
-  PROP_MATRIX
+  PROP_MATRIX,
+  PROP_CURSOR
 };
 
 enum {
@@ -79,6 +80,7 @@ struct _MechAreaPrivate
   GQuark name;
 
   MechRenderer *renderer;
+  MechCursor *pointer_cursor;
 
   /* In stage coordinates, counting borders,
    * not affected by matrix.
@@ -215,6 +217,9 @@ mech_area_set_property (GObject      *object,
     case PROP_MATRIX:
       mech_area_set_matrix (area, g_value_get_boxed (value));
       break;
+    case PROP_CURSOR:
+      mech_area_set_cursor (area, g_value_get_object (value));
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, param_id, pspec);
     }
@@ -250,6 +255,9 @@ mech_area_get_property (GObject    *object,
       break;
     case PROP_MATRIX:
       g_value_set_boxed (value, &priv->matrix);
+      break;
+    case PROP_CURSOR:
+      g_value_set_object (value, mech_area_get_cursor (area));
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, param_id, pspec);
@@ -450,6 +458,14 @@ mech_area_class_init (MechAreaClass *klass)
                                                        CAIRO_GOBJECT_TYPE_MATRIX,
                                                        G_PARAM_READWRITE |
                                                        G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (object_class,
+                                   PROP_CURSOR,
+                                   g_param_spec_object ("cursor",
+                                                        "Pointer cursor",
+                                                        "Pointer cursor to be displayed on this area",
+                                                        MECH_TYPE_CURSOR,
+                                                        G_PARAM_READWRITE |
+                                                        G_PARAM_STATIC_STRINGS));
   signals[DRAW] =
     g_signal_new ("draw",
                   G_TYPE_FROM_CLASS (klass),
@@ -2004,4 +2020,35 @@ mech_area_grab_focus (MechArea *area,
 
   window = mech_area_get_window (area);
   _mech_window_grab_focus (window, area, seat);
+}
+
+void
+mech_area_set_cursor (MechArea   *area,
+                      MechCursor *cursor)
+{
+  MechAreaPrivate *priv;
+
+  g_return_if_fail (MECH_IS_AREA (area));
+  g_return_if_fail (!cursor || MECH_IS_CURSOR (cursor));
+
+  priv = mech_area_get_instance_private (area);
+
+  if (cursor)
+    g_object_ref (cursor);
+
+  if (priv->pointer_cursor)
+    g_object_unref (priv->pointer_cursor);
+
+  priv->pointer_cursor = cursor;
+}
+
+MechCursor *
+mech_area_get_cursor (MechArea *area)
+{
+  MechAreaPrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_AREA (area), NULL);
+
+  priv = mech_area_get_instance_private (area);
+  return priv->pointer_cursor;
 }

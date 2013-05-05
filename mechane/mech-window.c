@@ -1116,6 +1116,27 @@ _mech_window_get_clock (MechWindow *window)
   return priv->clock;
 }
 
+MechCursor *
+_mech_window_get_current_cursor (MechWindow *window)
+{
+  MechWindowPrivate *priv;
+  GPtrArray *areas = NULL;
+  MechArea *area;
+
+  priv = mech_window_get_instance_private (window);
+
+  if (priv->pointer_info.grab_areas)
+    areas = priv->pointer_info.grab_areas;
+  else
+    areas = priv->pointer_info.crossing_areas;
+
+  if (!areas)
+    return NULL;
+
+  area = g_ptr_array_index (areas, areas->len - 1);
+  return mech_area_get_cursor (area);
+}
+
 MechArea *
 mech_window_get_focus (MechWindow *window)
 {

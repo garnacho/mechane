@@ -27,6 +27,7 @@ typedef struct _MechArea MechArea;
 #include <mechane/mech-types.h>
 #include <mechane/mech-events.h>
 #include <mechane/mech-renderer.h>
+#include <mechane/mech-cursor.h>
 
 G_BEGIN_DECLS
 
@@ -191,6 +192,10 @@ const gchar    * mech_area_get_name             (MechArea          *area);
 GQuark           mech_area_get_qname            (MechArea          *area);
 
 cairo_region_t * mech_area_get_shape            (MechArea          *area);
+
+void             mech_area_set_cursor           (MechArea          *area,
+                                                 MechCursor        *cursor);
+MechCursor     * mech_area_get_cursor           (MechArea          *area);
 
 G_END_DECLS
 

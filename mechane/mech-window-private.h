@@ -35,6 +35,7 @@ MechClock  * _mech_window_get_clock          (MechWindow  *window);
 MechStage  * _mech_window_get_stage          (MechWindow  *window);
 void         _mech_window_set_monitor        (MechWindow  *window,
                                               MechMonitor *monitor);
+MechCursor * _mech_window_get_current_cursor (MechWindow  *window);
 
 G_END_DECLS
 
