@@ -21,6 +21,7 @@
 typedef struct _MechWindow MechWindow;
 
 #include <mechane/mech-monitor.h>
+#include <mechane/mech-style.h>
 #include <mechane/mech-area.h>
 #include <mechane/mech-events.h>
 
@@ -111,6 +112,10 @@ gboolean          mech_window_move          (MechWindow      *window,
 gboolean          mech_window_resize        (MechWindow      *window,
                                              MechEvent       *event,
                                              MechSideFlags    side);
+
+void              mech_window_set_style     (MechWindow      *window,
+                                             MechStyle       *style);
+MechStyle       * mech_window_get_style     (MechWindow      *window);
 
 G_END_DECLS
 

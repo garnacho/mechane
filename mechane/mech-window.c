@@ -21,6 +21,7 @@
 #include <mechane/mech-backend-private.h>
 #include <mechane/mech-stage-private.h>
 #include <mechane/mech-area-private.h>
+#include <mechane/mech-clock-private.h>
 #include <mechane/mech-window-private.h>
 #include <mechane/mechane.h>
 
@@ -66,6 +67,7 @@ struct _MechWindowPrivate
   MechSurface *surface;
   MechClock *clock;
   MechArea *frame;
+  MechStyle *style;
 
   MechPointerInfo pointer_info;
   MechKeyboardInfo keyboard_info;
@@ -95,7 +97,8 @@ enum {
   PROP_RESIZABLE,
   PROP_VISIBLE,
   PROP_MONITOR,
-  PROP_STATE
+  PROP_STATE,
+  PROP_STYLE
 };
 
 static guint signals[LAST_SIGNAL] = { 0 };
@@ -130,6 +133,9 @@ mech_window_get_property (GObject    *object,
     case PROP_STATE:
       g_value_set_enum (value, mech_window_get_state (window));
       break;
+    case PROP_STYLE:
+      g_value_set_object (value, priv->style);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, param_id, pspec);
     }
@@ -153,6 +159,9 @@ mech_window_set_property (GObject      *object,
       break;
     case PROP_VISIBLE:
       mech_window_set_visible (window, g_value_get_boolean (value));
+      break;
+    case PROP_STYLE:
+      mech_window_set_style (window, g_value_get_object (value));
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, param_id, pspec);
@@ -183,6 +192,7 @@ mech_window_finalize (GObject *object)
   if (priv->state)
     g_array_unref (priv->state);
 
+  g_object_unref (priv->style);
   g_object_unref (priv->stage);
   g_object_unref (priv->frame);
 
@@ -700,12 +710,22 @@ mech_window_class_init (MechWindowClass *klass)
                                                       MECH_WINDOW_STATE_NORMAL,
                                                       G_PARAM_READWRITE |
                                                       G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (object_class,
+                                   PROP_STYLE,
+                                   g_param_spec_object ("style",
+                                                        "Style",
+                                                        "Style used to render "
+                                                        "the window contents",
+                                                        MECH_TYPE_STYLE,
+                                                        G_PARAM_READWRITE |
+                                                        G_PARAM_STATIC_STRINGS));
 }
 
 static void
 mech_window_init (MechWindow *window)
 {
   MechWindowPrivate *priv;
+  MechStyle *style;
 
   priv = mech_window_get_instance_private (window);
   priv->resizable = TRUE;
@@ -1205,4 +1225,36 @@ mech_window_resize (MechWindow    *window,
     return FALSE;
 
   return MECH_WINDOW_GET_CLASS (window)->resize (window, event, side);
+}
+
+void
+mech_window_set_style (MechWindow *window,
+                       MechStyle  *style)
+{
+  MechWindowPrivate *priv;
+
+  g_return_if_fail (MECH_IS_WINDOW (window));
+  g_return_if_fail (MECH_IS_STYLE (style));
+
+  priv = mech_window_get_instance_private (window);
+
+  if (style)
+    g_object_ref (style);
+
+  if (priv->style)
+    g_object_unref (priv->style);
+
+  priv->style = style;
+  g_object_notify ((GObject *) window, "style");
+}
+
+MechStyle *
+mech_window_get_style (MechWindow *window)
+{
+  MechWindowPrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_WINDOW (window), NULL);
+
+  priv = mech_window_get_instance_private (window);
+  return priv->style;
 }
