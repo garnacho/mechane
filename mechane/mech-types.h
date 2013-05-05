@@ -22,11 +22,21 @@
 
 G_BEGIN_DECLS
 
+#define MECH_TYPE_COLOR (mech_color_get_type ())
 #define MECH_TYPE_POINT (mech_point_get_type ())
 #define MECH_TYPE_BORDER (mech_border_get_type ())
 
+typedef struct _MechColor MechColor;
 typedef struct _MechPoint MechPoint;
 typedef struct _MechBorder MechBorder;
+
+struct _MechColor
+{
+  gdouble r;
+  gdouble g;
+  gdouble b;
+  gdouble a;
+};
 
 struct _MechPoint
 {
@@ -46,6 +56,10 @@ struct _MechBorder
   guint top_unit    : 4;
   guint bottom_unit : 4;
 };
+
+GType        mech_color_get_type    (void) G_GNUC_CONST;
+MechColor *  mech_color_copy        (MechColor *color);
+void         mech_color_free        (MechColor *color);
 
 GType        mech_point_get_type    (void) G_GNUC_CONST;
 MechPoint *  mech_point_copy        (MechPoint *point);

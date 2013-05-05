@@ -17,6 +17,20 @@
 
 #include <mechane/mech-types.h>
 
+G_DEFINE_BOXED_TYPE (MechColor, mech_color, mech_color_copy, mech_color_free)
+
+MechColor *
+mech_color_copy (MechColor *color)
+{
+  return g_slice_dup (MechColor, color);
+}
+
+void
+mech_color_free (MechColor *color)
+{
+  g_slice_free (MechColor, color);
+}
+
 G_DEFINE_BOXED_TYPE (MechPoint, mech_point, mech_point_copy, mech_point_free)
 
 MechPoint *
