@@ -19,6 +19,7 @@
 #define __MECH_BACKEND_WAYLAND_H__
 
 #include <wayland-client.h>
+#include <wayland-cursor.h>
 #include <mechane/mech-backend-private.h>
 
 G_BEGIN_DECLS
@@ -43,6 +44,7 @@ struct _MechBackendWayland
   struct wl_compositor *wl_compositor;
   struct wl_shm *wl_shm;
   struct wl_shell *wl_shell;
+  struct wl_cursor_theme *wl_cursor_theme;
 };
 
 struct _MechBackendWaylandClass

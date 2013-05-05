@@ -85,7 +85,11 @@ _backend_registry_handle_global (gpointer            user_data,
     backend->wl_compositor =
       wl_registry_bind (registry, id, &wl_compositor_interface, 1);
   else if (strcmp (interface, "wl_shm") == 0)
-    backend->wl_shm = wl_registry_bind (registry, id, &wl_shm_interface, 1);
+    {
+      backend->wl_shm = wl_registry_bind (registry, id, &wl_shm_interface, 1);
+      backend->wl_cursor_theme = wl_cursor_theme_load (NULL, 32,
+                                                       backend->wl_shm);
+    }
   else if (strcmp (interface, "wl_shell") == 0)
     backend->wl_shell = wl_registry_bind (registry, id, &wl_shell_interface, 1);
   else if (strcmp (interface, "wl_seat") == 0)
