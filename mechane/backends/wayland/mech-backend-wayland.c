@@ -25,6 +25,7 @@
 #include "mech-window-wayland.h"
 #include "mech-surface-wayland.h"
 #include "mech-seat-wayland.h"
+#include "mech-cursor-wayland.h"
 
 G_DEFINE_TYPE (MechBackendWayland, _mech_backend_wayland, MECH_TYPE_BACKEND)
 
@@ -61,6 +62,15 @@ _mech_backend_wayland_create_surface (MechBackend *backend)
   return _mech_surface_wayland_new (MECH_BACKING_SURFACE_TYPE_SHM, NULL);
 }
 
+static MechCursor *
+_mech_backend_wayland_create_cursor (MechBackend    *backend,
+                                     MechCursorType  cursor_type)
+{
+  return g_object_new (MECH_TYPE_CURSOR_WAYLAND,
+                       "cursor-type", cursor_type,
+                       NULL);
+}
+
 static void
 _mech_backend_wayland_class_init (MechBackendWaylandClass *klass)
 {
@@ -68,6 +78,7 @@ _mech_backend_wayland_class_init (MechBackendWaylandClass *klass)
 
   backend_class->create_window = _mech_backend_wayland_create_window;
   backend_class->create_surface = _mech_backend_wayland_create_surface;
+  backend_class->create_cursor = _mech_backend_wayland_create_cursor;
 
   g_type_class_add_private (klass, sizeof (MechBackendWaylandPriv));
 }

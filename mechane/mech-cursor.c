@@ -100,6 +100,29 @@ mech_cursor_init (MechCursor *cursor)
 {
 }
 
+MechCursor *
+mech_cursor_lookup (MechCursorType type)
+{
+#define N_CURSORS MECH_CURSOR_DRAG_BOTTOM_RIGHT + 1
+
+  static MechCursor *predefined_cursors[N_CURSORS] = { 0 };
+
+  g_return_val_if_fail (type >= MECH_CURSOR_BLANK &&
+                        type < N_CURSORS, NULL);
+
+#undef N_CURSORS
+
+  if (!predefined_cursors[type])
+    {
+      MechBackend *backend;
+
+      backend = mech_backend_get ();
+      predefined_cursors[type] = mech_backend_create_cursor (backend, type);
+    }
+
+  return predefined_cursors[type];
+}
+
 MechCursorType
 mech_cursor_get_cursor_type (MechCursor *cursor)
 {

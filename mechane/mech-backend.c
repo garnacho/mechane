@@ -52,3 +52,12 @@ mech_backend_create_surface (MechBackend *backend)
 
   return MECH_BACKEND_GET_CLASS (backend)->create_surface (backend);
 }
+
+MechCursor *
+mech_backend_create_cursor (MechBackend    *backend,
+                            MechCursorType  type)
+{
+  g_return_val_if_fail (MECH_IS_BACKEND (backend), NULL);
+
+  return MECH_BACKEND_GET_CLASS (backend)->create_cursor (backend, type);
+}

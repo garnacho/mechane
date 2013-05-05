@@ -45,6 +45,8 @@ struct _MechBackendClass
 
   MechWindow  * (* create_window)  (MechBackend    *backend);
   MechSurface * (* create_surface) (MechBackend    *backend);
+  MechCursor  * (* create_cursor)  (MechBackend    *backend,
+                                    MechCursorType  type);
 };
 
 GType         mech_backend_get_type       (void) G_GNUC_CONST;
@@ -52,6 +54,8 @@ GType         mech_backend_get_type       (void) G_GNUC_CONST;
 MechBackend * mech_backend_get            (void);
 MechWindow  * mech_backend_create_window  (MechBackend    *backend);
 MechSurface * mech_backend_create_surface (MechBackend    *backend);
+MechCursor  * mech_backend_create_cursor  (MechBackend    *backend,
+                                           MechCursorType  type);
 
 G_END_DECLS
 

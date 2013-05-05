@@ -45,6 +45,7 @@ struct _MechCursorClass
 
 GType            mech_cursor_get_type        (void) G_GNUC_CONST;
 
+MechCursor *     mech_cursor_lookup          (MechCursorType  type);
 MechCursorType   mech_cursor_get_cursor_type (MechCursor     *cursor);
 
 G_END_DECLS
