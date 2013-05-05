@@ -21,6 +21,7 @@ mech_sources = 			\
 	mech-stage.c		\
 	mech-style.c		\
 	mech-surface.c		\
+	mech-theme.c		\
 	mech-types.c		\
 	mech-window.c
 
