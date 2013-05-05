@@ -23,6 +23,7 @@
 G_BEGIN_DECLS
 
 /* Base */
+#include <mechane/mech-cursor.h>
 #include <mechane/mech-seat.h>
 #include <mechane/mech-enum-types.h>
 #include <mechane/mech-enums.h>

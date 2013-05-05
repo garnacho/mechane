@@ -11,6 +11,7 @@ mech_sources = 			\
 	mech-area.c		\
 	mech-backend.c		\
 	mech-clock.c		\
+	mech-cursor.c		\
 	mech-events.c		\
 	mech-monitor.c		\
 	mech-monitor-layout.c	\
