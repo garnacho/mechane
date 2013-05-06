@@ -17,6 +17,7 @@
 
 #include <mechane/mech-window-private.h>
 #include <xkbcommon/xkbcommon.h>
+#include "mech-cursor-wayland.h"
 #include "mech-seat-wayland.h"
 
 enum {
@@ -33,6 +34,10 @@ struct _MechSeatWaylandPriv
   MechWindow *pointer_window;
   gdouble pointer_x;
   gdouble pointer_y;
+
+  MechCursorWayland *pointer_cursor;
+  struct wl_surface *pointer_surface;
+  guint32 enter_serial;
 
   struct xkb_context *xkb_context;
   struct xkb_state *xkb_state;
@@ -98,6 +103,53 @@ mech_seat_wayland_get_property (GObject    *object,
 
 /* Pointer interface */
 static void
+mech_seat_wayland_check_cursor (MechSeatWayland *seat)
+{
+  MechSeatWaylandPriv *priv = seat->_priv;
+  gint width, height, hotspot_x, hotspot_y;
+  struct wl_buffer *wl_buffer;
+  MechCursorWayland *cursor;
+
+  priv = ((MechSeatWayland *) seat)->_priv;
+  cursor = (MechCursorWayland *)
+    _mech_window_get_current_cursor (priv->pointer_window);
+
+  if (!cursor)
+    {
+      cursor = (MechCursorWayland *) mech_cursor_lookup (MECH_CURSOR_NORMAL);
+      g_return_if_fail (cursor != NULL);
+    }
+
+  if (cursor == priv->pointer_cursor)
+    return;
+
+  priv->pointer_cursor = cursor;
+  wl_buffer = mech_cursor_wayland_get_buffer (cursor, &width, &height,
+                                              &hotspot_x, &hotspot_y);
+
+  if (wl_buffer)
+    {
+      if (!priv->pointer_surface)
+        {
+          MechBackendWayland *backend;
+
+          backend = _mech_backend_wayland_get ();
+          priv->pointer_surface =
+            wl_compositor_create_surface (backend->wl_compositor);
+        }
+
+      wl_pointer_set_cursor (priv->wl_pointer, priv->enter_serial,
+                             priv->pointer_surface, hotspot_x, hotspot_y);
+
+      wl_surface_attach (priv->pointer_surface, wl_buffer, 0, 0);
+      wl_surface_damage (priv->pointer_surface, 0, 0, width, height);
+      wl_surface_commit (priv->pointer_surface);
+    }
+  else
+    wl_pointer_set_cursor (priv->wl_pointer, priv->enter_serial, NULL, 0, 0);
+}
+
+static void
 _seat_pointer_enter (gpointer           data,
                      struct wl_pointer *wl_pointer,
                      guint32            serial,
@@ -110,6 +162,7 @@ _seat_pointer_enter (gpointer           data,
   MechEvent event = { 0 };
 
   backend = _mech_backend_wayland_get ();
+  priv->enter_serial = serial;
 
   priv->pointer_window =
     _mech_backend_wayland_lookup_window (backend, wl_surface);
@@ -120,6 +173,8 @@ _seat_pointer_enter (gpointer           data,
   event.any.seat = data;
   event.any.serial = serial;
   mech_window_handle_event (priv->pointer_window, &event);
+
+  mech_seat_wayland_check_cursor (data);
 }
 
 static void
@@ -138,6 +193,8 @@ _seat_pointer_leave (gpointer           data,
 
   priv->pointer_window = NULL;
   priv->pointer_x = priv->pointer_y = -1;
+  priv->enter_serial = 0;
+  priv->pointer_cursor = NULL;
 }
 
 static void
@@ -163,6 +220,8 @@ _seat_pointer_motion (gpointer           data,
   event.pointer.y = priv->pointer_y = wl_fixed_to_double (surface_y);
 
   mech_window_handle_event (priv->pointer_window, &event);
+
+  mech_seat_wayland_check_cursor (data);
 }
 
 static void
@@ -192,6 +251,7 @@ _seat_pointer_button (gpointer           data,
   event.pointer.y = priv->pointer_y;
 
   mech_window_handle_event (priv->pointer_window, &event);
+  mech_seat_wayland_check_cursor (data);
 }
 
 static void
@@ -222,6 +282,7 @@ _seat_pointer_axis (gpointer           data,
     event.scroll.dy = wl_fixed_to_double (value);
 
   mech_window_handle_event (priv->pointer_window, &event);
+  mech_seat_wayland_check_cursor (data);
 }
 
 static struct wl_pointer_listener pointer_listener_funcs = {
@@ -569,6 +630,8 @@ mech_seat_wayland_finalize (GObject *object)
     wl_touch_destroy (priv->wl_touch);
   if (priv->wl_seat)
     wl_seat_destroy (priv->wl_seat);
+  if (priv->pointer_surface)
+    wl_surface_destroy (priv->pointer_surface);
   if (priv->xkb_state)
     xkb_state_unref (priv->xkb_state);
 
