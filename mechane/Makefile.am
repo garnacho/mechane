@@ -29,6 +29,7 @@ mech_sources = 			\
 	mech-style.c		\
 	mech-surface.c		\
 	mech-theme.c		\
+	mech-toggle.c		\
 	mech-types.c		\
 	mech-window.c
 
