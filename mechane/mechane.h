@@ -38,6 +38,10 @@ G_BEGIN_DECLS
 /* Basic interfaces */
 #include <mechane/mech-orientable.h>
 
+/* Basic areas */
+#include <mechane/mech-linear-box.h>
+
+
 G_END_DECLS
 
 #endif /* __MECHANE_H__ */

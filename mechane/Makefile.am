@@ -13,6 +13,7 @@ mech_sources = 			\
 	mech-clock.c		\
 	mech-cursor.c		\
 	mech-events.c		\
+	mech-linear-box.c	\
 	mech-monitor.c		\
 	mech-monitor-layout.c	\
 	mech-orientable.c	\
