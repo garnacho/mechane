@@ -40,6 +40,7 @@ G_BEGIN_DECLS
 
 /* Basic areas */
 #include <mechane/mech-fixed-box.h>
+#include <mechane/mech-floating-box.h>
 #include <mechane/mech-linear-box.h>
 
 
