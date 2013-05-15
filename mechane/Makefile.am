@@ -9,6 +9,7 @@ BUILT_SOURCES = 		\
 mech_sources = 			\
 	$(BUILT_SOURCES)	\
 	mech-area.c		\
+	mech-activatable.c	\
 	mech-backend.c		\
 	mech-clock.c		\
 	mech-cursor.c		\

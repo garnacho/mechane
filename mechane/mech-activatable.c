@@ -15,36 +15,35 @@
  * License along with this library. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __MECHANE_H__
-#define __MECHANE_H__
-
-#include <glib-object.h>
-
-G_BEGIN_DECLS
-
-/* Base */
-#include <mechane/mech-cursor.h>
-#include <mechane/mech-seat.h>
-#include <mechane/mech-enum-types.h>
-#include <mechane/mech-enums.h>
-#include <mechane/mech-events.h>
-#include <mechane/mech-monitor.h>
-#include <mechane/mech-monitor-layout.h>
-#include <mechane/mech-theme.h>
-#include <mechane/mech-renderer.h>
-#include <mechane/mech-area.h>
-#include <mechane/mech-window.h>
-
-/* Basic interfaces */
+#include <mechane/mechane.h>
 #include <mechane/mech-activatable.h>
-#include <mechane/mech-orientable.h>
 
-/* Basic areas */
-#include <mechane/mech-fixed-box.h>
-#include <mechane/mech-floating-box.h>
-#include <mechane/mech-linear-box.h>
+enum {
+  ACTIVATED,
+  LAST_SIGNAL
+};
 
+static guint signals[LAST_SIGNAL] = { 0 };
 
-G_END_DECLS
+G_DEFINE_INTERFACE (MechActivatable, mech_activatable, MECH_TYPE_AREA)
 
-#endif /* __MECHANE_H__ */
+static void
+mech_activatable_default_init (MechActivatableInterface *iface)
+{
+  signals[ACTIVATED] =
+    g_signal_new ("activated",
+                  MECH_TYPE_ACTIVATABLE,
+                  G_SIGNAL_ACTION | G_SIGNAL_RUN_FIRST,
+                  G_STRUCT_OFFSET (MechActivatableInterface, activated),
+                  NULL, NULL,
+                  g_cclosure_marshal_VOID__VOID,
+                  G_TYPE_NONE, 0);
+}
+
+void
+mech_activatable_activate (MechActivatable *activatable)
+{
+  g_return_if_fail (MECH_IS_ACTIVATABLE (activatable));
+
+  g_signal_emit (activatable, signals[ACTIVATED], 0);
+}
