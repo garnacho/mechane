@@ -30,6 +30,7 @@ mech_sources = 			\
 	mech-surface.c		\
 	mech-theme.c		\
 	mech-toggle.c		\
+	mech-toggle-button.c	\
 	mech-types.c		\
 	mech-window.c
 
