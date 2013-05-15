@@ -43,6 +43,7 @@ G_BEGIN_DECLS
 #include <mechane/mech-fixed-box.h>
 #include <mechane/mech-floating-box.h>
 #include <mechane/mech-linear-box.h>
+#include <mechane/mech-button.h>
 
 
 G_END_DECLS

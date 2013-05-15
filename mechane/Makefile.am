@@ -11,6 +11,7 @@ mech_sources = 			\
 	mech-area.c		\
 	mech-activatable.c	\
 	mech-backend.c		\
+	mech-button.c		\
 	mech-clock.c		\
 	mech-cursor.c		\
 	mech-events.c		\
