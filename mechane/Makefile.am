@@ -15,6 +15,7 @@ mech_sources = 			\
 	mech-events.c		\
 	mech-monitor.c		\
 	mech-monitor-layout.c	\
+	mech-orientable.c	\
 	mech-parser.c		\
 	mech-pattern.c		\
 	mech-renderer.c		\

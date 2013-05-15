@@ -78,6 +78,11 @@ typedef enum {
 } MechUnit;
 
 typedef enum {
+  MECH_ORIENTATION_VERTICAL,
+  MECH_ORIENTATION_HORIZONTAL
+} MechOrientation;
+
+typedef enum {
   MECH_AXIS_X,
   MECH_AXIS_Y
 } MechAxis;

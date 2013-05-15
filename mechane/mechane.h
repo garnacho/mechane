@@ -35,6 +35,9 @@ G_BEGIN_DECLS
 #include <mechane/mech-area.h>
 #include <mechane/mech-window.h>
 
+/* Basic interfaces */
+#include <mechane/mech-orientable.h>
+
 G_END_DECLS
 
 #endif /* __MECHANE_H__ */
