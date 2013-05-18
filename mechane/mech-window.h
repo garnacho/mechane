@@ -65,6 +65,8 @@ struct _MechWindowClass
   void     (* set_visible)   (MechWindow        *window,
                               gboolean           visible);
 
+  gboolean (* close_request) (MechWindow        *window);
+
   void     (* size_changed)  (MechWindow        *window,
                               gint               width,
                               gint               height);

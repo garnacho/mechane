@@ -89,6 +89,7 @@ struct _MechWindowPrivate
 enum {
   DRAW,
   SIZE_CHANGED,
+  CLOSE_REQUEST,
   LAST_SIGNAL
 };
 
@@ -668,6 +669,14 @@ mech_window_class_init (MechWindowClass *klass)
                   NULL, NULL,
                   _mech_marshal_VOID__INT_INT,
                   G_TYPE_NONE, 2, G_TYPE_INT, G_TYPE_INT);
+  signals[CLOSE_REQUEST] =
+    g_signal_new ("close-request",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST,
+                  G_STRUCT_OFFSET (MechWindowClass, close_request),
+                  g_signal_accumulator_true_handled, NULL,
+                  _mech_marshal_BOOLEAN__VOID,
+                  G_TYPE_BOOLEAN, 0);
 
   g_object_class_install_property (object_class,
                                    PROP_TITLE,
