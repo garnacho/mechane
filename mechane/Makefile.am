@@ -32,6 +32,7 @@ mech_sources = 			\
 	mech-toggle.c		\
 	mech-toggle-button.c	\
 	mech-types.c		\
+	mech-window-frame.c	\
 	mech-window.c
 
 AM_CPPFLAGS = $(MECH_DEPS_CFLAGS)
