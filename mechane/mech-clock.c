@@ -15,6 +15,7 @@
  * License along with this library. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <mechane/mech-animation-private.h>
 #include <mechane/mech-clock-private.h>
 #include <mechane/mech-window-private.h>
 #include <glib.h>
@@ -30,7 +31,10 @@ enum {
 struct _MechClockPrivate
 {
   MechWindow *window;
+  GList *animations;
+  GList *dispatched;
   guint running            : 1;
+  guint dispatched_deleted : 1;
 };
 
 G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MechClock, _mech_clock, G_TYPE_OBJECT)
@@ -38,7 +42,31 @@ G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MechClock, _mech_clock, G_TYPE_OBJECT)
 static gboolean
 mech_clock_dispatch_impl (MechClock *clock)
 {
-  return FALSE;
+  MechClockPrivate *priv;
+
+  priv = _mech_clock_get_instance_private (clock);
+  priv->dispatched = priv->animations;
+
+  while (priv->dispatched)
+    {
+      MechAnimation *animation = priv->dispatched->data;
+      GList *next = priv->dispatched->next;
+
+      priv->dispatched_deleted = FALSE;
+
+      if (!_mech_animation_tick (animation) && !priv->dispatched_deleted)
+        {
+          next = priv->dispatched->next;
+          priv->animations = g_list_delete_link (priv->animations,
+                                                 priv->dispatched);
+        }
+
+      priv->dispatched = next;
+    }
+
+  _mech_window_process_updates (priv->window);
+
+  return priv->animations != NULL;
 }
 
 static void
@@ -82,6 +110,17 @@ mech_clock_get_property (GObject    *object,
 }
 
 static void
+mech_clock_finalize (GObject *object)
+{
+  MechClockPrivate *priv;
+
+  priv = _mech_clock_get_instance_private ((MechClock *) object);
+  g_list_free (priv->animations);
+
+  G_OBJECT_CLASS (_mech_clock_parent_class)->finalize (object);
+}
+
+static void
 _mech_clock_class_init (MechClockClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
@@ -90,6 +129,7 @@ _mech_clock_class_init (MechClockClass *klass)
 
   object_class->set_property = mech_clock_set_property;
   object_class->get_property = mech_clock_get_property;
+  object_class->finalize = mech_clock_finalize;
 
   g_object_class_install_property (object_class,
                                    PROP_WINDOW,
@@ -126,6 +166,43 @@ _mech_clock_set_running (MechClock *clock,
       priv->running = TRUE;
       MECH_CLOCK_GET_CLASS (clock)->start (clock);
     }
+}
+
+void
+_mech_clock_attach_animation (MechClock     *clock,
+                              MechAnimation *animation)
+{
+  MechClockPrivate *priv;
+
+  g_return_if_fail (MECH_IS_CLOCK (clock));
+  g_return_if_fail (MECH_IS_ANIMATION (animation));
+
+  priv = _mech_clock_get_instance_private (clock);
+  _mech_clock_set_running (clock, TRUE);
+  priv->animations = g_list_append (priv->animations, animation);
+}
+
+gboolean
+_mech_clock_detach_animation (MechClock     *clock,
+                              MechAnimation *animation)
+{
+  MechClockPrivate *priv;
+  GList *list;
+
+  g_return_val_if_fail (MECH_IS_CLOCK (clock), FALSE);
+  g_return_val_if_fail (MECH_IS_ANIMATION (animation), FALSE);
+
+  priv = _mech_clock_get_instance_private (clock);
+  list = g_list_find (priv->animations, animation);
+
+  if (!list)
+    return FALSE;
+
+  if (list == priv->dispatched)
+    priv->dispatched_deleted = TRUE;
+
+  priv->animations = g_list_delete_link (priv->animations, list);
+  return TRUE;
 }
 
 gboolean

@@ -40,6 +40,9 @@ G_BEGIN_DECLS
 #include <mechane/mech-orientable.h>
 #include <mechane/mech-toggle.h>
 
+/* Animations */
+#include <mechane/mech-animation.h>
+
 /* Basic areas */
 #include <mechane/mech-fixed-box.h>
 #include <mechane/mech-floating-box.h>
