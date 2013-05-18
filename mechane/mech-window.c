@@ -21,6 +21,7 @@
 #include <mechane/mech-backend-private.h>
 #include <mechane/mech-stage-private.h>
 #include <mechane/mech-area-private.h>
+#include <mechane/mech-window-frame-private.h>
 #include <mechane/mech-clock-private.h>
 #include <mechane/mech-window-private.h>
 #include <mechane/mechane.h>
@@ -731,6 +732,32 @@ mech_window_class_init (MechWindowClass *klass)
 }
 
 static void
+window_frame_close (MechWindowFrame *frame,
+                    MechWindow      *window)
+{
+  gboolean retval;
+
+  g_object_ref (window);
+  g_signal_emit (window, signals[CLOSE_REQUEST], 0, &retval);
+
+  if (!retval)
+    mech_window_set_visible (window, FALSE);
+
+  g_object_unref (window);
+}
+
+static void
+window_frame_maximize_toggle (MechWindowFrame *frame,
+                              GParamSpec      *pspec,
+                              MechWindow      *window)
+{
+  if (mech_window_frame_get_maximized (frame))
+    mech_window_push_state (window, MECH_WINDOW_STATE_MAXIMIZED, NULL);
+  else
+    mech_window_pop_state (window);
+}
+
+static void
 mech_window_init (MechWindow *window)
 {
   MechWindowPrivate *priv;
@@ -739,9 +766,18 @@ mech_window_init (MechWindow *window)
   priv = mech_window_get_instance_private (window);
   priv->resizable = TRUE;
   priv->stage = _mech_stage_new ();
-  priv->frame = mech_area_new (NULL, MECH_BUTTON_MASK | MECH_MOTION_MASK);
+  priv->frame = mech_window_frame_new ();
 
   _mech_area_make_window_root (priv->frame, window);
+
+  g_signal_connect_swapped (priv->frame, "move",
+                            G_CALLBACK (mech_window_move), window);
+  g_signal_connect_swapped (priv->frame, "resize",
+                            G_CALLBACK (mech_window_resize), window);
+  g_signal_connect (priv->frame, "close",
+                    G_CALLBACK (window_frame_close), window);
+  g_signal_connect (priv->frame, "notify::maximized",
+                    G_CALLBACK (window_frame_maximize_toggle), window);
 }
 
 MechWindow *
@@ -779,6 +815,7 @@ mech_window_set_resizable (MechWindow *window,
 
   priv = mech_window_get_instance_private (window);
   priv->resizable = (resizable == TRUE);
+  mech_window_frame_set_resizable (MECH_WINDOW_FRAME (priv->frame), resizable);
   g_object_notify ((GObject *) window, "resizable");
 }
 
