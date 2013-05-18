@@ -42,6 +42,7 @@ G_BEGIN_DECLS
 
 /* Animations */
 #include <mechane/mech-animation.h>
+#include <mechane/mech-acceleration.h>
 
 /* Basic areas */
 #include <mechane/mech-fixed-box.h>
