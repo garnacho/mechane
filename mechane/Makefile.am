@@ -10,6 +10,7 @@ mech_sources = 			\
 	$(BUILT_SOURCES)	\
 	mech-area.c		\
 	mech-activatable.c	\
+	mech-adjustable.c	\
 	mech-animation.c	\
 	mech-acceleration.c	\
 	mech-backend.c		\

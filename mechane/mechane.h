@@ -37,6 +37,7 @@ G_BEGIN_DECLS
 
 /* Basic interfaces */
 #include <mechane/mech-activatable.h>
+#include <mechane/mech-adjustable.h>
 #include <mechane/mech-orientable.h>
 #include <mechane/mech-toggle.h>
 
