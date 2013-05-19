@@ -41,6 +41,7 @@ mech_sources = 			\
 	mech-toggle.c		\
 	mech-toggle-button.c	\
 	mech-types.c		\
+	mech-view.c		\
 	mech-window-frame.c	\
 	mech-window.c
 

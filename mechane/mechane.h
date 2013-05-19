@@ -58,6 +58,7 @@ G_BEGIN_DECLS
 #include <mechane/mech-linear-box.h>
 #include <mechane/mech-button.h>
 #include <mechane/mech-toggle-button.h>
+#include <mechane/mech-view.h>
 #include <mechane/mech-slider.h>
 
 
