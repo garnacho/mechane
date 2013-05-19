@@ -20,6 +20,7 @@ mech_sources = 			\
 	mech-events.c		\
 	mech-fixed-box.c	\
 	mech-floating-box.c	\
+	mech-gesture.c		\
 	mech-linear-box.c	\
 	mech-monitor.c		\
 	mech-monitor-layout.c	\

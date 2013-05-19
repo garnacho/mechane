@@ -46,6 +46,7 @@ G_BEGIN_DECLS
 
 /* Event controllers */
 #include <mechane/mech-controller.h>
+#include <mechane/mech-gesture.h>
 
 /* Basic areas */
 #include <mechane/mech-fixed-box.h>
