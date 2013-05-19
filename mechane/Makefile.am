@@ -22,6 +22,7 @@ mech_sources = 			\
 	mech-floating-box.c	\
 	mech-gesture.c		\
 	mech-gesture-drag.c	\
+	mech-gesture-swipe.c	\
 	mech-linear-box.c	\
 	mech-monitor.c		\
 	mech-monitor-layout.c	\

@@ -48,6 +48,7 @@ G_BEGIN_DECLS
 #include <mechane/mech-controller.h>
 #include <mechane/mech-gesture.h>
 #include <mechane/mech-gesture-drag.h>
+#include <mechane/mech-gesture-swipe.h>
 
 /* Basic areas */
 #include <mechane/mech-fixed-box.h>
