@@ -88,6 +88,13 @@ typedef enum {
 } MechAxis;
 
 typedef enum {
+  MECH_AXIS_FLAG_NONE = 0,
+  MECH_AXIS_FLAG_X    = 1 << MECH_AXIS_X,
+  MECH_AXIS_FLAG_Y    = 1 << MECH_AXIS_Y,
+  MECH_AXIS_FLAG_BOTH = (MECH_AXIS_FLAG_X | MECH_AXIS_FLAG_Y)
+} MechAxisFlags;
+
+typedef enum {
   MECH_STATE_NORMAL,
   MECH_STATE_HOVERED,
   MECH_STATE_FOCUSED,
