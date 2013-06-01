@@ -276,6 +276,7 @@ render_stage_context_push_target (RenderStageContext *context,
                                          sizeof (RenderingTarget));
 
   target.offscreen = offscreen;
+  _mech_surface_acquire (offscreen->node.data);
 
   if (offscreen->node.parent)
     target.cr = _mech_surface_cairo_create (offscreen->node.data);
@@ -314,6 +315,8 @@ render_stage_context_pop_target (RenderStageContext *context)
 
   g_array_remove_index (context->target_stack,
                         context->target_stack->len - 1);
+
+  _mech_surface_release (offscreen->node.data);
 
   return offscreen;
 }

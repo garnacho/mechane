@@ -47,6 +47,9 @@ struct _MechSurfaceClass
                                      gint         width,
                                      gint         height);
   cairo_surface_t * (* get_surface) (MechSurface *surface);
+
+  gboolean          (* acquire)     (MechSurface *surface);
+  void              (* release)     (MechSurface *surface);
 };
 
 GType            mech_surface_get_type          (void) G_GNUC_CONST;
@@ -65,6 +68,9 @@ cairo_t        * _mech_surface_cairo_create     (MechSurface       *surface);
 void             _mech_surface_set_source       (cairo_t           *cr,
                                                  MechSurface       *surface);
 
+gboolean         _mech_surface_acquire          (MechSurface       *surface);
+void             _mech_surface_release          (MechSurface       *surface);
+
 void             _mech_surface_damage           (MechSurface       *surface,
                                                  cairo_rectangle_t *rect);
 cairo_region_t * _mech_surface_apply_clip       (MechSurface       *surface,
@@ -72,6 +78,8 @@ cairo_region_t * _mech_surface_apply_clip       (MechSurface       *surface,
 gboolean         _mech_surface_area_is_rendered (MechSurface       *surface,
                                                  MechArea          *area,
                                                  cairo_rectangle_t *rect);
+gboolean
+            _mech_surface_get_need_full_refresh (MechSurface       *surface);
 
 G_END_DECLS
 

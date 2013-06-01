@@ -205,14 +205,22 @@ static void
 mech_window_draw (MechWindow *window,
                   cairo_t    *cr)
 {
+  gboolean need_full_refresh;
   MechWindowPrivate *priv;
 
   priv = mech_window_get_instance_private (window);
+  need_full_refresh = _mech_surface_get_need_full_refresh (priv->surface);
 
-  cairo_push_group (cr);
+  if (!need_full_refresh)
+    cairo_push_group (cr);
+
   _mech_stage_render (priv->stage, cr);
-  cairo_pop_group_to_source (cr);
-  cairo_paint (cr);
+
+  if (!need_full_refresh)
+    {
+      cairo_pop_group_to_source (cr);
+      cairo_paint (cr);
+    }
 }
 
 static gint
@@ -1087,6 +1095,7 @@ _mech_window_process_updates (MechWindow *window)
     _mech_stage_set_size (priv->stage, &priv->width, &priv->height);
 
   cr = _mech_surface_cairo_create (priv->surface);
+  _mech_surface_acquire (priv->surface);
 
   if (priv->resize_requested)
     {
@@ -1104,6 +1113,7 @@ _mech_window_process_updates (MechWindow *window)
     g_warning ("Cairo context got error '%s'",
                cairo_status_to_string (cairo_status (cr)));
 
+  _mech_surface_release (priv->surface);
   priv->resize_requested = FALSE;
   priv->redraw_requested = FALSE;
   cairo_destroy (cr);
