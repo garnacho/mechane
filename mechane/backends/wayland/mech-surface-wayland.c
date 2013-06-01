@@ -17,6 +17,7 @@
 
 #include "mech-surface-wayland.h"
 #include "mech-surface-wayland-shm.h"
+#include "mech-surface-wayland-egl.h"
 #include "mech-backend-wayland.h"
 
 G_DEFINE_ABSTRACT_TYPE (MechSurfaceWayland, mech_surface_wayland,
@@ -100,9 +101,53 @@ MechSurface *
 _mech_surface_wayland_new (MechBackingSurfaceType  type,
                            struct wl_surface      *wl_surface)
 {
-  return g_object_new (MECH_BACKING_SURFACE_TYPE_SHM,
-                       "wl-surface", wl_surface,
-                       NULL);
+  gboolean need_full_refresh = FALSE;
+  GType gtype = G_TYPE_NONE;
+  MechSurface *surface;
+  GError *error = NULL;
+
+  g_return_val_if_fail (type == MECH_BACKING_SURFACE_TYPE_EGL ||
+                        type == MECH_BACKING_SURFACE_TYPE_SHM, NULL);
+
+  if (type == MECH_BACKING_SURFACE_TYPE_SHM)
+    gtype = MECH_TYPE_SURFACE_WAYLAND_SHM;
+  else if (type == MECH_BACKING_SURFACE_TYPE_EGL)
+    {
+      gtype = MECH_TYPE_SURFACE_WAYLAND_EGL;
+      need_full_refresh = TRUE;
+    }
+
+  if (gtype == G_TYPE_NONE)
+    return NULL;
+
+  surface = g_object_new (gtype,
+                          "wl-surface", wl_surface,
+                          "need-full-refresh", need_full_refresh,
+                          NULL);
+
+  if (!G_IS_INITABLE (surface))
+    return surface;
+
+  if (!g_initable_init (G_INITABLE (surface), NULL, &error))
+    {
+      if (gtype == MECH_TYPE_SURFACE_WAYLAND_EGL)
+        {
+          g_warning ("Could not create EGL surface, falling "
+                     "back to SHM ones. The error was: %s",
+                     error->message);
+          g_error_free (error);
+
+          return _mech_surface_wayland_new (MECH_BACKING_SURFACE_TYPE_SHM,
+                                            wl_surface);
+        }
+
+      g_critical ("Could not a create a surface "
+                  "of type '%s', The error was: %s",
+                  g_type_name (gtype), error->message);
+      g_error_free (error);
+    }
+
+  return surface;
 }
 
 gboolean

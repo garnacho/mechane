@@ -233,7 +233,7 @@ mech_window_wayland_set_visible (MechWindow *window,
   if (visible)
     {
       if (!priv->surface)
-        priv->surface = _mech_surface_wayland_new (MECH_BACKING_SURFACE_TYPE_SHM,
+        priv->surface = _mech_surface_wayland_new (MECH_BACKING_SURFACE_TYPE_EGL,
                                                    priv->wl_surface);
       _mech_window_set_surface (window, priv->surface);
     }

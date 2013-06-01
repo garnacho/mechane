@@ -32,6 +32,7 @@ GDK_PIXBUF_VERSION=2.24
 LIBRSVG_VERSION=2.36
 WAYLAND_VERSION=1.0
 XKB_COMMON_VERSION=0.2
+EGL_VERSION=7.10
 
 # glib
 AM_PATH_GLIB_2_0($GLIB_VERSION, , AC_MSG_ERROR([
@@ -81,6 +82,14 @@ PKG_CHECK_MODULES(MECH_WAYLAND_DEPS, [
         wayland-client >= $WAYLAND_VERSION
         wayland-cursor >= $WAYLAND_VERSION
         xkbcommon >= $XKB_COMMON_VERSION
+        ])
+
+# egl deps
+PKG_CHECK_MODULES(MECH_EGL_DEPS, [
+        wayland-egl >= $WAYLAND_VERSION
+        cairo-gl >= $CAIRO_VERSION
+        egl >= $EGL_VERSION
+        glesv2
         ])
 
 AC_CONFIG_FILES([
