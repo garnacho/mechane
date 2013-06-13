@@ -61,6 +61,8 @@ G_BEGIN_DECLS
 #include <mechane/mech-view.h>
 #include <mechane/mech-scroll-box.h>
 
+#include <mechane/mech-text-buffer.h>
+
 /* High-level widgets */
 #include <mechane/mech-image.h>
 #include <mechane/mech-scroll-area.h>

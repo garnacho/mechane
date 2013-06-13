@@ -40,6 +40,7 @@ mech_sources = 			\
 	mech-stage.c		\
 	mech-style.c		\
 	mech-surface.c		\
+	mech-text-buffer.c	\
 	mech-theme.c		\
 	mech-toggle.c		\
 	mech-toggle-button.c	\
