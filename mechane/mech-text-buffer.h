@@ -122,6 +122,33 @@ gboolean         mech_text_buffer_iter_is_end   (MechTextIter     *iter);
 gunichar         mech_text_buffer_iter_get_char (MechTextIter     *iter);
 
 
+/* User data */
+guint            mech_text_buffer_register_data       (MechTextBuffer *buffer,
+                                                       gpointer        instance,
+                                                       GType           type);
+void             mech_text_buffer_unregister_data     (MechTextBuffer *buffer,
+                                                       gpointer        instance,
+                                                       guint           id);
+void             mech_text_buffer_unregister_instance (MechTextBuffer *buffer,
+                                                       gpointer        instance);
+
+void             mech_text_buffer_get_datav           (MechTextBuffer     *buffer,
+                                                       const MechTextIter *iter,
+                                                       guint               id,
+                                                       GValue             *value);
+gboolean         mech_text_buffer_set_datav           (MechTextBuffer     *buffer,
+                                                       MechTextIter       *start,
+                                                       MechTextIter       *end,
+                                                       guint               id,
+                                                       GValue             *value);
+void             mech_text_buffer_get_data            (MechTextBuffer     *buffer,
+                                                       const MechTextIter *iter,
+                                                       ...);
+void             mech_text_buffer_set_data            (MechTextBuffer     *buffer,
+                                                       MechTextIter       *start,
+                                                       MechTextIter       *end,
+                                                       ...);
+
 G_END_DECLS
 
 #endif /* __MECH_TEXT_BUFFER_H__ */

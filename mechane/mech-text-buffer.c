@@ -35,8 +35,11 @@
 
 typedef struct _MechTextBufferPrivate MechTextBufferPrivate;
 typedef struct _MechTextBufferNode MechTextBufferNode;
+typedef struct _MechTextRegisteredData MechTextRegisteredData;
+typedef struct _MechTextNodeData MechTextNodeData;
 typedef struct _MechStoredString MechStoredString;
 typedef struct _MechTextSeqIterator MechTextSeqIterator;
+typedef struct _MechTextUserData MechTextUserData;
 
 struct _MechStoredString
 {
@@ -49,6 +52,21 @@ struct _MechTextBufferNode
   MechStoredString *stored;
   gsize pos;
   gsize len;
+
+  GArray *data;
+};
+
+struct _MechTextNodeData
+{
+  guint id;
+  MechTextUserData *data;
+};
+
+struct _MechTextRegisteredData
+{
+  gpointer instance;
+  GType type;
+  guint id;
 };
 
 struct _MechTextSeqIterator
@@ -59,10 +77,19 @@ struct _MechTextSeqIterator
   guint finished : 1;
 };
 
+struct _MechTextUserData
+{
+  GValue value;
+  gint ref_count;
+};
+
 struct _MechTextBufferPrivate
 {
   GPtrArray *strings;
   GSequence *buffer;
+  GArray *registered_data;
+
+  guint last_registered_id;
 };
 
 enum {
@@ -87,6 +114,58 @@ void
 mech_text_iter_free (MechTextIter *iter)
 {
   g_slice_free (MechTextIter, iter);
+}
+
+static MechTextRegisteredData *
+_mech_text_buffer_lookup_registered_data (MechTextBuffer *buffer,
+                                          guint           id)
+{
+  MechTextBufferPrivate *priv;
+  guint i;
+
+  priv = mech_text_buffer_get_instance_private (buffer);
+
+  for (i = 0; i < priv->registered_data->len; i++)
+    {
+      MechTextRegisteredData *data;
+
+      data = &g_array_index (priv->registered_data, MechTextRegisteredData, i);
+
+      if (data->id == id)
+        return data;
+    }
+
+  return NULL;
+}
+
+static MechTextUserData *
+_mech_text_user_data_new (GValue *value)
+{
+  MechTextUserData *data;
+
+  data = g_slice_new0 (MechTextUserData);
+  g_value_init (&data->value, G_VALUE_TYPE (value));
+  g_value_copy (value, &data->value);
+  data->ref_count = 1;
+
+  return data;
+}
+
+static MechTextUserData *
+_mech_text_user_data_ref (MechTextUserData *data)
+{
+  g_atomic_int_inc (&data->ref_count);
+  return data;
+}
+
+static void
+_mech_text_user_data_unref (MechTextUserData *data)
+{
+  if (g_atomic_int_dec_and_test (&data->ref_count))
+    {
+      g_value_unset (&data->value);
+      g_slice_free (MechTextUserData, data);
+    }
 }
 
 static MechStoredString *
@@ -147,7 +226,8 @@ _mech_stored_string_free (MechStoredString *stored)
 static MechTextBufferNode *
 _mech_text_buffer_node_new (MechStoredString *stored,
                             gsize             pos,
-                            gint              len)
+                            gint              len,
+                            GArray           *data)
 {
   MechTextBufferNode *node;
   guint i;
@@ -157,9 +237,96 @@ _mech_text_buffer_node_new (MechStoredString *stored,
   node->pos = pos;
   node->len = len;
 
+  if (data)
+    {
+      node->data = g_array_new (FALSE, FALSE, sizeof (MechTextNodeData));
+      g_array_insert_vals (node->data, 0, data->data, data->len);
+
+      for (i = 0; i < node->data->len; i++)
+        {
+          MechTextNodeData *node_data;
+          node_data = &g_array_index (node->data, MechTextNodeData, i);
+          _mech_text_user_data_ref (node_data->data);
+        }
+    }
+
   g_atomic_int_inc (&stored->node_count);
 
   return node;
+}
+
+static void
+_mech_text_buffer_node_set_data (MechTextBufferNode *node,
+                                 MechTextBuffer     *buffer,
+                                 guint               id,
+                                 MechTextUserData   *data)
+{
+  MechTextNodeData new = { 0 };
+  guint i;
+
+  if (!node->data && data)
+    node->data = g_array_new (FALSE, FALSE, sizeof (MechTextNodeData));
+
+  /* FIXME: binary insertion should help here */
+  for (i = 0; i < node->data->len; i++)
+    {
+      MechTextNodeData *node_data;
+
+      node_data = &g_array_index (node->data, MechTextNodeData, i);
+
+      if (node_data->id == id)
+        {
+          if (node_data->data == data)
+            return;
+
+          if (node_data->data)
+            {
+              _mech_text_user_data_unref (node_data->data);
+              node_data->data = NULL;
+            }
+
+          if (data)
+            node_data->data = _mech_text_user_data_ref (data);
+          else
+            g_array_remove_index_fast (node->data, i);
+          return;
+        }
+      else if (data && node_data->id > id)
+        break;
+    }
+
+  if (data)
+    {
+      new.id = id;
+      new.data = _mech_text_user_data_ref (data);
+
+      if (i < node->data->len)
+        g_array_insert_val (node->data, i, new);
+      else
+        g_array_append_val (node->data, new);
+    }
+}
+
+static MechTextUserData *
+_mech_text_buffer_node_get_data (MechTextBufferNode *node,
+                                 guint               id)
+{
+  guint i;
+
+  if (!node->data)
+    return NULL;
+
+  for (i = 0; i < node->data->len; i++)
+    {
+      MechTextNodeData *node_data;
+
+      node_data = &g_array_index (node->data, MechTextNodeData, i);
+
+      if (node_data->id == id)
+        return node_data->data;
+    }
+
+  return NULL;
 }
 
 static void
@@ -170,6 +337,19 @@ _mech_text_buffer_node_free (MechTextBufferNode *node)
 
   stored = node->stored;
 
+  if (node->data)
+    {
+      for (i = 0; i < node->data->len; i++)
+        {
+          MechTextNodeData *node_data;
+
+          node_data = &g_array_index (node->data, MechTextNodeData, i);
+          _mech_text_user_data_unref (node_data->data);
+        }
+
+      g_array_unref (node->data);
+    }
+
   g_slice_free (MechTextBufferNode, node);
 
   if (g_atomic_int_dec_and_test (&stored->node_count))
@@ -177,6 +357,61 @@ _mech_text_buffer_node_free (MechTextBufferNode *node)
       g_string_free (stored->string, TRUE);
       stored->string = NULL;
     }
+}
+
+static GArray *
+_mech_text_buffer_node_intersect_data (GSequenceIter *minor,
+                                       GSequenceIter *major)
+{
+  MechTextBufferNode *minor_node, *major_node;
+  GArray *data;
+  guint i, j;
+
+  if (g_sequence_iter_is_begin (major) ||
+      g_sequence_iter_is_end (minor))
+    return NULL;
+
+  minor_node = g_sequence_get (minor);
+  major_node = g_sequence_get (major);
+  data = g_array_new (FALSE, FALSE, sizeof (MechTextNodeData));
+  i = j = 0;
+
+  while (i < minor_node->data->len &&
+         j < major_node->data->len)
+    {
+      MechTextNodeData *minor_data, *major_data;
+
+      minor_data = &g_array_index (minor_node->data, MechTextNodeData, i);
+      major_data = &g_array_index (major_node->data, MechTextNodeData, j);
+
+      if (minor_data->id == major_data->id)
+        {
+          if (minor_data->data == major_data->data)
+            g_array_append_val (data, *minor_data);
+          i++;
+          j++;
+        }
+      else if (minor_data->id < major_data->id)
+        i++;
+      else
+        j++;
+    }
+
+  return data;
+}
+
+static gboolean
+_mech_text_buffer_node_data_equals (MechTextBufferNode *node1,
+                                    MechTextBufferNode *node2)
+{
+  if ((node1->data != NULL) != (node2->data != NULL))
+    return FALSE;
+
+  if (node1->data->len != node2->data->len)
+    return FALSE;
+
+  return memcmp (node1->data->data, node2->data->data,
+                 g_array_get_element_size (node1->data) * node1->data->len) == 0;
 }
 
 static gboolean
@@ -203,7 +438,8 @@ _mech_text_buffer_node_split (MechTextBuffer  *buffer,
   /* Create node for text after cut_end */
   new = _mech_text_buffer_node_new (node->stored,
                                     node->pos + split_pos,
-                                    node->len - split_pos);
+                                    node->len - split_pos,
+                                    node->data);
   end_iter = g_sequence_insert_before (next, new);
 
   /* Trim text after cur_start in original node */
@@ -284,6 +520,39 @@ _text_buffer_intern_string (MechTextBuffer  *buffer,
   return stored;
 }
 
+gboolean
+_mech_text_buffer_store_user_data (MechTextBuffer   *buffer,
+                                   MechTextIter     *start,
+                                   MechTextIter     *end,
+                                   guint             id,
+                                   MechTextUserData *user_data)
+{
+  GSequenceIter *iter, *update_start, *update_end;
+
+  if (g_sequence_iter_is_end (start->iter) ||
+      mech_text_buffer_iter_compare (start, end) == 0)
+    return FALSE;
+
+  _mech_text_buffer_node_split (buffer, end->iter, end->pos, &update_end);
+  _mech_text_buffer_node_split (buffer, start->iter, start->pos, &update_start);
+  iter = update_start;
+
+  while (iter != update_end)
+    {
+      MechTextBufferNode *node;
+
+      g_assert (!g_sequence_iter_is_end (iter));
+
+      node = g_sequence_get (iter);
+      _mech_text_buffer_node_set_data (node, buffer, id, user_data);
+      iter = g_sequence_iter_next (iter);
+    }
+
+  INITIALIZE_ITER (start, buffer, update_start, 0);
+  INITIALIZE_ITER (end, buffer, update_end, 0);
+  return TRUE;
+}
+
 static gboolean
 _text_buffer_check_node_append (MechTextBuffer *buffer,
                                 MechTextIter   *insert,
@@ -340,12 +609,74 @@ _find_next_paragraph_break (const gchar *string)
   return str;
 }
 
+void
+_mech_text_buffer_check_reunite_nodes (MechTextBuffer *buffer,
+                                       MechTextIter   *start,
+                                       MechTextIter   *end)
+{
+  MechTextBufferNode *node, *check;
+  GSequenceIter *check_iter;
+  guint new_iter_pos;
+
+  g_assert (start->pos == 0);
+  g_assert (end->pos == 0);
+
+  /* Check start/end nodes with the outer sequences, if both
+   * contiguous nodes point to contiguous points of a same
+   * string and have the same data, they can be reunited.
+   */
+
+  if (!g_sequence_iter_is_end (start->iter) &&
+      !g_sequence_iter_is_begin (start->iter))
+    {
+      check_iter = g_sequence_iter_prev (start->iter);
+      node = g_sequence_get (start->iter);
+      check = g_sequence_get (check_iter);
+
+      if (node != check &&
+          NODE_STRING_POS (check, check->len + 1) == NODE_STRING (node) &&
+          _mech_text_buffer_node_data_equals (node, check))
+        {
+          gboolean same_position;
+
+          same_position = start->iter == end->iter;
+          new_iter_pos = check->len + 1;
+          check->len += node->len;
+          g_sequence_remove (start->iter);
+          INITIALIZE_ITER (start, buffer, check_iter, new_iter_pos);
+
+          /* No need to check the end iter */
+          if (same_position)
+            return;
+        }
+    }
+
+  if (!g_sequence_iter_is_end (end->iter) &&
+      !g_sequence_iter_is_begin (end->iter))
+    {
+      check_iter = g_sequence_iter_prev (end->iter);
+      node = g_sequence_get (end->iter);
+      check = g_sequence_get (check_iter);
+
+      if (node != check &&
+          NODE_STRING_POS (check, check->len + 1) == NODE_STRING (node) &&
+          _mech_text_buffer_node_data_equals (node, check))
+        {
+          new_iter_pos = check->len + 1;
+          check->len += node->len;
+          g_sequence_remove (end->iter);
+          INITIALIZE_ITER (end, buffer, check_iter, new_iter_pos);
+        }
+    }
+}
+
 static void
 mech_text_buffer_finalize (GObject *object)
 {
   MechTextBufferPrivate *priv;
 
   priv = mech_text_buffer_get_instance_private ((MechTextBuffer *) object);
+  g_array_unref (priv->registered_data);
   g_sequence_free (priv->buffer);
   g_ptr_array_unref (priv->strings);
 
@@ -363,6 +694,7 @@ _mech_text_buffer_insert_impl (MechTextBuffer *buffer,
   MechTextBufferNode *new, *node = NULL;
   MechStoredString *stored = NULL;
   MechTextBufferPrivate *priv;
+  GArray *data_array = NULL;
   gboolean is_first = TRUE;
   const gchar *str, *next;
   MechTextIter insert;
@@ -394,18 +726,28 @@ _mech_text_buffer_insert_impl (MechTextBuffer *buffer,
           last = insert_pos;
           str = next;
         }
+
+      data_array =
+        _mech_text_buffer_node_intersect_data (insert_pos,
+                                               g_sequence_iter_prev (insert_pos));
     }
   else if (insert.pos == node->len)
     {
       insert_pos = g_sequence_iter_next (insert.iter);
+      data_array = _mech_text_buffer_node_intersect_data (insert.iter,
+							  insert_pos);
     }
   else
     {
       _mech_text_buffer_node_split (buffer, insert.iter,
 				    insert.pos, &insert_pos);
+      data_array = g_array_ref (node->data);
     }
 
   INITIALIZE_ITER (end, buffer, insert_pos, 0);
+
+  if (data_array)
+    g_array_unref (data_array);
 }
 
 static void
@@ -422,7 +764,6 @@ _mech_text_buffer_delete_impl (MechTextBuffer *buffer,
   /* Both iters point now to the same position */
   INITIALIZE_ITER (start, buffer, delete_end, 0);
   INITIALIZE_ITER (end, buffer, delete_end, 0);
-  _text_buffer_check_trailing_paragraph (buffer, end, end);
 }
 
 static void
@@ -467,6 +808,8 @@ mech_text_buffer_init (MechTextBuffer *buffer)
   priv->strings =
     g_ptr_array_new_with_free_func ((GDestroyNotify) _mech_stored_string_free);
   priv->buffer = g_sequence_new ((GDestroyNotify) _mech_text_buffer_node_free);
+  priv->registered_data =
+    g_array_new (FALSE, FALSE, sizeof (MechTextRegisteredData));
 }
 
 MechTextBuffer *
@@ -686,6 +1029,279 @@ mech_text_buffer_insert (MechTextBuffer *buffer,
   start = end = *iter;
   g_signal_emit (buffer, signals[INSERT], 0, &start, &end, text, (gulong) len);
   *iter = end;
+}
+
+guint
+mech_text_buffer_register_data (MechTextBuffer *buffer,
+                                gpointer        instance,
+                                GType           type)
+{
+  MechTextBufferPrivate *priv;
+  MechTextRegisteredData new;
+
+  g_return_val_if_fail (MECH_IS_TEXT_BUFFER (buffer), 0);
+  g_return_val_if_fail (instance != NULL, 0);
+
+  priv = mech_text_buffer_get_instance_private (buffer);
+  new.id = ++priv->last_registered_id;
+  new.instance = instance;
+  new.type = type;
+
+  g_array_append_val (priv->registered_data, new);
+
+  return new.id;
+}
+
+static void
+_mech_text_buffer_unregister (MechTextBuffer *buffer,
+                              gpointer        instance,
+                              guint           id)
+{
+  MechTextBufferPrivate *priv;
+  guint i = 0;
+
+  priv = mech_text_buffer_get_instance_private (buffer);
+
+  while (i < priv->registered_data->len)
+    {
+      MechTextRegisteredData *data;
+
+      data = &g_array_index (priv->registered_data,
+                             MechTextRegisteredData, i);
+
+      if (data->instance == instance && (id == 0 || data->id == id))
+        g_array_remove_index_fast (priv->registered_data, i);
+      else
+        i++;
+    }
+}
+
+void
+mech_text_buffer_unregister_data (MechTextBuffer *buffer,
+                                  gpointer        instance,
+                                  guint           id)
+{
+  g_return_if_fail (MECH_IS_TEXT_BUFFER (buffer));
+  g_return_if_fail (instance != NULL);
+  g_return_if_fail (id > 0);
+
+  _mech_text_buffer_unregister (buffer, instance, id);
+}
+
+void
+mech_text_buffer_unregister_instance (MechTextBuffer *buffer,
+                                      gpointer        instance)
+{
+  g_return_if_fail (MECH_IS_TEXT_BUFFER (buffer));
+  g_return_if_fail (instance != NULL);
+
+  _mech_text_buffer_unregister (buffer, instance, 0);
+}
+
+static MechTextBufferNode *
+_mech_text_buffer_iter_get_node (const MechTextIter *iter)
+{
+  GSequenceIter *seq_iter;
+
+  if (g_sequence_iter_is_end (iter->iter))
+    {
+      if (g_sequence_iter_is_begin (iter->iter))
+        return NULL;
+
+      seq_iter = g_sequence_iter_prev (iter->iter);
+    }
+  else
+    seq_iter = iter->iter;
+
+  return g_sequence_get (seq_iter);
+}
+
+void
+mech_text_buffer_get_datav (MechTextBuffer     *buffer,
+                            const MechTextIter *iter,
+                            guint               id,
+                            GValue             *value)
+{
+  MechTextRegisteredData *registered;
+  MechTextBufferNode *node;
+  MechTextUserData *data;
+
+  g_return_if_fail (MECH_IS_TEXT_BUFFER (buffer));
+  g_return_if_fail (IS_VALID_ITER (iter, buffer));
+  g_return_if_fail (id != 0);
+
+  node = _mech_text_buffer_iter_get_node (iter);
+  registered = _mech_text_buffer_lookup_registered_data (buffer, id);
+  g_value_init (value, registered->type);
+
+  if (node)
+    {
+      data = _mech_text_buffer_node_get_data (node, id);
+      g_value_copy (&data->value, value);
+    }
+}
+
+gboolean
+mech_text_buffer_set_datav (MechTextBuffer *buffer,
+                            MechTextIter   *start,
+                            MechTextIter   *end,
+                            guint           id,
+                            GValue         *value)
+{
+  MechTextUserData *user_data = NULL;
+  MechTextIter minor, major;
+  gboolean retval;
+
+  g_return_val_if_fail (MECH_IS_TEXT_BUFFER (buffer), FALSE);
+  g_return_val_if_fail (IS_VALID_ITER (start, buffer), FALSE);
+  g_return_val_if_fail (IS_VALID_ITER (end, buffer), FALSE);
+
+  if (mech_text_buffer_iter_compare (start, end) == 0)
+    return TRUE;
+
+  _mech_text_iter_ensure_order (buffer, start, end, &minor, &major);
+
+  if (value)
+    user_data = _mech_text_user_data_new (value);
+
+  retval = _mech_text_buffer_store_user_data (buffer, &minor, &major,
+                                              id, user_data);
+  if (user_data)
+    _mech_text_user_data_unref (user_data);
+
+  _mech_text_buffer_check_reunite_nodes (buffer, &minor, &major);
+
+  if (start)
+    *start = minor;
+
+  if (end)
+    *end = major;
+
+  return retval;
+}
+
+void
+mech_text_buffer_get_data (MechTextBuffer     *buffer,
+                           const MechTextIter *iter,
+                           ...)
+{
+  MechTextBufferNode *node;
+  MechTextUserData *data;
+  va_list varargs;
+  gchar *error;
+  guint id;
+
+  g_return_if_fail (MECH_IS_TEXT_BUFFER (buffer));
+  g_return_if_fail (IS_VALID_ITER (iter, buffer));
+
+  va_start (varargs, iter);
+  id = va_arg (varargs, gint);
+  node = _mech_text_buffer_iter_get_node (iter);
+
+  while (id)
+    {
+      data = _mech_text_buffer_node_get_data (node, id);
+
+      if (!data)
+        {
+          MechTextRegisteredData *registered;
+          GValue empty = { 0 };
+
+          registered = _mech_text_buffer_lookup_registered_data (buffer, id);
+
+          if (!registered)
+            {
+              g_warning ("%s: ID %d does not correspond to any registered type",
+                         G_STRFUNC, id);
+              break;
+            }
+
+          g_value_init (&empty, registered->type);
+          G_VALUE_LCOPY (&empty, varargs, G_VALUE_NOCOPY_CONTENTS, &error);
+        }
+      else
+        G_VALUE_LCOPY (&data->value, varargs, G_VALUE_NOCOPY_CONTENTS, &error);
+
+      if (error)
+        {
+          g_warning ("%s: %s", G_STRLOC, error);
+          g_free (error);
+          break;
+        }
+
+      id = va_arg (varargs, gint);
+    }
+}
+
+void
+mech_text_buffer_set_data (MechTextBuffer *buffer,
+                           MechTextIter   *start,
+                           MechTextIter   *end,
+                           ...)
+{
+  MechTextIter minor, major;
+  va_list varargs;
+  gboolean retval;
+  guint id;
+
+  g_return_if_fail (MECH_IS_TEXT_BUFFER (buffer));
+  g_return_if_fail (IS_VALID_ITER (start, buffer));
+  g_return_if_fail (IS_VALID_ITER (end, buffer));
+
+  if (mech_text_buffer_iter_compare (start, end) == 0)
+    return;
+
+  va_start (varargs, end);
+  id = va_arg (varargs, gint);
+  _mech_text_iter_ensure_order (buffer, start, end, &minor, &major);
+
+  while (id)
+    {
+      MechTextRegisteredData *registered;
+      MechTextUserData *user_data;
+      GValue value = { 0 };
+      gchar *error;
+
+      registered = _mech_text_buffer_lookup_registered_data (buffer, id);
+
+      if (!registered)
+        {
+          g_warning ("%s: ID %d does not correspond to any registered type",
+                     G_STRFUNC, id);
+          break;
+        }
+
+      G_VALUE_COLLECT_INIT (&value, registered->type,
+                            varargs, 0, &error);
+      if (error)
+	{
+	  g_warning ("%s: %s", G_STRFUNC, error);
+	  g_free (error);
+	  break;
+	}
+
+      /* FIXME: should we better precompute a user
+       * data array and store it in one go? */
+      user_data = _mech_text_user_data_new (&value);
+      retval = _mech_text_buffer_store_user_data (buffer, &minor, &major,
+                                                  id, user_data);
+      _mech_text_user_data_unref (user_data);
+      g_value_unset (&value);
+
+      if (!retval)
+        break;
+
+      id = va_arg (varargs, gint);
+    }
+
+  _mech_text_buffer_check_reunite_nodes (buffer, &minor, &major);
+  va_end (varargs);
+
+  if (start)
+    *start = minor;
+
+  if (end)
+    *end = major;
 }
 
 gboolean
