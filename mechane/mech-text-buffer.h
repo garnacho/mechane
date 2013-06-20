@@ -165,6 +165,19 @@ void             mech_text_buffer_set_data            (MechTextBuffer     *buffe
                                                        MechTextIter       *end,
                                                        ...);
 
+/* Marks */
+void             mech_text_buffer_update_mark         (MechTextBuffer *buffer,
+                                                       guint           mark_id,
+                                                       MechTextIter   *iter);
+guint            mech_text_buffer_create_mark         (MechTextBuffer *buffer,
+                                                       MechTextIter   *iter);
+void             mech_text_buffer_delete_mark         (MechTextBuffer *buffer,
+                                                       guint           mark_id);
+
+gboolean         mech_text_buffer_get_iter_at_mark    (MechTextBuffer *buffer,
+                                                       guint           mark,
+                                                       MechTextIter   *iter);
+
 G_END_DECLS
 
 #endif /* __MECH_TEXT_BUFFER_H__ */

@@ -38,6 +38,7 @@ typedef struct _MechTextBufferNode MechTextBufferNode;
 typedef struct _MechTextRegisteredData MechTextRegisteredData;
 typedef struct _MechTextNodeData MechTextNodeData;
 typedef struct _MechStoredString MechStoredString;
+typedef struct _MechTextBufferMark MechTextBufferMark;
 typedef struct _MechTextSeqIterator MechTextSeqIterator;
 typedef struct _MechTextUserData MechTextUserData;
 
@@ -69,6 +70,12 @@ struct _MechTextRegisteredData
   guint id;
 };
 
+struct _MechTextBufferMark
+{
+  guint id;
+  MechTextIter iter;
+};
+
 struct _MechTextSeqIterator
 {
   MechTextIter start;
@@ -88,11 +95,13 @@ struct _MechTextBufferPrivate
   GPtrArray *strings;
   GSequence *buffer;
   GArray *registered_data;
+  GArray *marks;
 
   guint last_registered_id;
   guint paragraph_break_id;
 
   guint paragraph;
+  guint mark;
 };
 
 enum {
@@ -168,6 +177,131 @@ _mech_text_user_data_unref (MechTextUserData *data)
     {
       g_value_unset (&data->value);
       g_slice_free (MechTextUserData, data);
+    }
+}
+
+static guint
+_mech_text_mark_get_insert_position (MechTextBuffer *buffer,
+                                     GSequenceIter  *iter,
+                                     gsize           pos)
+{
+  MechTextBufferPrivate *priv;
+  MechTextBufferMark *mark;
+  gint min, max, mid;
+
+  priv = mech_text_buffer_get_instance_private (buffer);
+  min = 0;
+  max = priv->marks->len - 1;
+  mid = (min + max) / 2;
+
+  while (max >= min)
+    {
+      mid = (min + max) / 2;
+      mark = &g_array_index (priv->marks, MechTextBufferMark, mid);
+
+      if (iter == mark->iter.iter)
+        {
+          if (pos == mark->iter.pos)
+            return mid;
+          else if (pos > mark->iter.pos)
+            min = mid + 1;
+          else
+            max = mid - 1;
+        }
+      else if (g_sequence_iter_compare (iter, mark->iter.iter) > 0)
+        min = mid + 1;
+      else
+        max = mid - 1;
+    }
+
+  return MAX (min, max);
+}
+
+static MechTextBufferMark *
+_mech_text_mark_find (MechTextBuffer *buffer,
+                      guint           mark_id,
+                      guint          *pos)
+{
+  MechTextBufferPrivate *priv;
+  MechTextBufferMark *mark;
+  guint i;
+
+  priv = mech_text_buffer_get_instance_private (buffer);
+
+  for (i = 0; i < priv->marks->len; i++)
+    {
+      mark = &g_array_index (priv->marks, MechTextBufferMark, i);
+
+      if (mark->id == mark_id)
+        {
+          if (pos)
+            *pos = i;
+
+          return mark;
+        }
+    }
+
+  return NULL;
+}
+
+static void
+_mech_text_buffer_split_marks (MechTextBuffer *buffer,
+                               GSequenceIter  *iter,
+                               gssize          pos)
+{
+  MechTextBufferPrivate *priv;
+  MechTextBufferMark *mark;
+  GSequenceIter *next;
+  gint mark_pos;
+
+  if (g_sequence_iter_is_end (iter))
+    return;
+
+  /* Assume the node has been already split, so the next iter
+   * already points to the second half of the previous data.
+   */
+  priv = mech_text_buffer_get_instance_private (buffer);
+  next = g_sequence_iter_next (iter);
+  mark_pos = _mech_text_mark_get_insert_position (buffer, iter, pos);
+
+  while (pos < priv->marks->len)
+    {
+      mark = &g_array_index (priv->marks,
+                             MechTextBufferMark, mark_pos);
+
+      if (mark->iter.iter != iter)
+        break;
+
+      INITIALIZE_ITER (&mark->iter, buffer, next, 0);
+      mark_pos++;
+    }
+}
+
+static void
+_mech_text_buffer_collapse_marks (MechTextBuffer *buffer,
+                                  GSequenceIter  *start,
+                                  GSequenceIter  *end)
+{
+  MechTextBufferPrivate *priv;
+  MechTextBufferMark *mark;
+  gint mark_pos;
+
+  if (g_sequence_iter_is_end (start))
+    return;
+
+  priv = mech_text_buffer_get_instance_private (buffer);
+  mark_pos = _mech_text_mark_get_insert_position (buffer, start, 0);
+
+  while (mark_pos < priv->marks->len)
+    {
+      mark = &g_array_index (priv->marks,
+                             MechTextBufferMark, mark_pos);
+
+      if (g_sequence_iter_compare (mark->iter.iter, end) >= 0)
+        break;
+
+      INITIALIZE_ITER (&mark->iter, buffer, end, 0);
+      mark_pos++;
     }
 }
 
@@ -451,6 +585,9 @@ _mech_text_buffer_node_split (MechTextBuffer  *buffer,
   if (end)
     *end = end_iter;
 
+  /* Split marks on this node, if any */
+  _mech_text_buffer_split_marks (buffer, iter, split_pos);
+
   return TRUE;
 }
 
@@ -459,6 +596,7 @@ _mech_text_buffer_delete_nodes (MechTextBuffer *buffer,
                                 GSequenceIter  *start,
                                 GSequenceIter  *end)
 {
+  _mech_text_buffer_collapse_marks (buffer, start, end);
   g_sequence_remove_range (start, end);
 }
 
@@ -798,6 +936,7 @@ mech_text_buffer_finalize (GObject *object)
                                     object, priv->paragraph_break_id);
 
   g_array_unref (priv->registered_data);
+  g_array_unref (priv->marks);
   g_sequence_free (priv->buffer);
   g_ptr_array_unref (priv->strings);
 
@@ -964,6 +1103,7 @@ mech_text_buffer_init (MechTextBuffer *buffer)
   priv->strings =
     g_ptr_array_new_with_free_func ((GDestroyNotify) _mech_stored_string_free);
   priv->buffer = g_sequence_new ((GDestroyNotify) _mech_text_buffer_node_free);
+  priv->marks = g_array_new (FALSE, FALSE, sizeof (MechTextBufferMark));
   priv->registered_data =
     g_array_new (FALSE, FALSE, sizeof (MechTextRegisteredData));
   priv->paragraph_break_id =
@@ -1916,4 +2056,104 @@ mech_text_buffer_get_byte_offset (MechTextBuffer     *buffer,
     count *= -1;
 
   return count;
+}
+
+guint
+mech_text_buffer_create_mark (MechTextBuffer *buffer,
+                              MechTextIter   *iter)
+{
+  MechTextBufferPrivate *priv;
+  MechTextBufferMark new;
+  gint pos;
+
+  g_return_val_if_fail (MECH_IS_TEXT_BUFFER (buffer), 0);
+  g_return_val_if_fail (IS_VALID_ITER (iter, buffer), 0);
+
+  priv = mech_text_buffer_get_instance_private (buffer);
+  new.id = ++priv->mark;
+  new.iter = *iter;
+  pos = _mech_text_mark_get_insert_position (buffer, iter->iter, iter->pos);
+
+  if (pos >= priv->marks->len)
+    g_array_append_val (priv->marks, new);
+  else
+    g_array_insert_val (priv->marks, pos, new);
+
+  return new.id;
+}
+
+void
+mech_text_buffer_update_mark (MechTextBuffer *buffer,
+                              guint           mark_id,
+                              MechTextIter   *iter)
+{
+  MechTextBufferMark *mark, new;
+  MechTextBufferPrivate *priv;
+  guint del_pos, pos;
+
+  g_return_if_fail (MECH_IS_TEXT_BUFFER (buffer));
+  g_return_if_fail (IS_VALID_ITER (iter, buffer));
+  g_return_if_fail (mark_id != 0);
+
+  mark = _mech_text_mark_find (buffer, mark_id, &del_pos);
+
+  if (!mark)
+    return;
+
+  priv = mech_text_buffer_get_instance_private (buffer);
+  pos = _mech_text_mark_get_insert_position (buffer, iter->iter, iter->pos);
+
+  if (pos == del_pos)
+    {
+      mark->iter = *iter;
+      return;
+    }
+
+  new.id = mark_id;
+  new.iter = *iter;
+
+  if (del_pos > pos)
+    del_pos++;
+
+  if (pos >= priv->marks->len)
+    g_array_append_val (priv->marks, new);
+  else
+    g_array_insert_val (priv->marks, pos, new);
+
+  g_array_remove_index (priv->marks, del_pos);
+}
+
+void
+mech_text_buffer_delete_mark (MechTextBuffer *buffer,
+                              guint           mark_id)
+{
+  MechTextBufferPrivate *priv;
+  guint pos;
+
+  g_return_if_fail (MECH_IS_TEXT_BUFFER (buffer));
+  g_return_if_fail (mark_id != 0);
+
+  priv = mech_text_buffer_get_instance_private (buffer);
+
+  if (_mech_text_mark_find (buffer, mark_id, &pos))
+    g_array_remove_index (priv->marks, pos);
+}
+
+gboolean
+mech_text_buffer_get_iter_at_mark (MechTextBuffer *buffer,
+                                   guint           mark_id,
+                                   MechTextIter   *iter)
+{
+  MechTextBufferMark *mark;
+
+  g_return_val_if_fail (MECH_IS_TEXT_BUFFER (buffer), FALSE);
+  g_return_val_if_fail (mark_id != 0, FALSE);
+
+  if ((mark = _mech_text_mark_find (buffer, mark_id, NULL)) == NULL)
+    return FALSE;
+
+  if (iter)
+    *iter = mark->iter;
+
+  return TRUE;
 }
