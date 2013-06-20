@@ -90,6 +90,9 @@ struct _MechTextBufferPrivate
   GArray *registered_data;
 
   guint last_registered_id;
+  guint paragraph_break_id;
+
+  guint paragraph;
 };
 
 enum {
@@ -484,6 +487,62 @@ _text_buffer_iter_node_terminates_paragraph (GSequenceIter *iter)
   return _text_buffer_is_line_terminator (ch);
 }
 
+static guint
+_mech_text_buffer_node_get_paragraph (MechTextBuffer     *buffer,
+                                      MechTextBufferNode *node)
+{
+  MechTextBufferPrivate *priv;
+  MechTextUserData *data;
+
+  priv = mech_text_buffer_get_instance_private (buffer);
+  data = _mech_text_buffer_node_get_data (node, priv->paragraph_break_id);
+
+  return g_value_get_uint (&data->value);
+}
+
+static MechTextUserData *
+_text_buffer_find_paragraph (MechTextBuffer *buffer,
+                             MechTextIter   *iter)
+{
+  MechTextBufferPrivate *priv;
+  MechTextIter prev;
+  gunichar ch;
+
+  if (!iter)
+    return NULL;
+
+  priv = mech_text_buffer_get_instance_private (buffer);
+  prev = *iter;
+
+  if (!mech_text_buffer_iter_previous (&prev, 1))
+    return NULL;
+
+  ch = mech_text_buffer_iter_get_char (&prev);
+
+  if (_text_buffer_is_line_terminator (ch))
+    return NULL;
+
+  return _mech_text_buffer_node_get_data (g_sequence_get (prev.iter),
+                                          priv->paragraph_break_id);
+}
+
+static MechTextUserData *
+_text_buffer_next_paragraph (MechTextBuffer *buffer)
+{
+  MechTextBufferPrivate *priv;
+  MechTextUserData *paragraph;
+  GValue value = { 0 };
+
+  priv = mech_text_buffer_get_instance_private (buffer);
+
+  g_value_init (&value, G_TYPE_UINT);
+  g_value_set_uint (&value, ++priv->paragraph);
+  paragraph = _mech_text_user_data_new (&value);
+  g_value_unset (&value);
+
+  return paragraph;
+}
+
 static MechStoredString *
 _text_buffer_intern_string (MechTextBuffer  *buffer,
                             MechTextIter    *iter,
@@ -609,6 +668,65 @@ _find_next_paragraph_break (const gchar *string)
   return str;
 }
 
+static void
+_text_buffer_check_trailing_paragraph (MechTextBuffer *buffer,
+                                       MechTextIter   *start,
+                                       MechTextIter   *end)
+{
+  MechTextIter prev_start, prev_end, para_end;
+  MechTextUserData *paragraph = NULL;
+  MechTextBufferPrivate *priv;
+  gunichar ch;
+
+  priv = mech_text_buffer_get_instance_private (buffer);
+  prev_start = *start;
+
+  if (mech_text_buffer_iter_is_end (end) ||
+      !mech_text_buffer_iter_previous (&prev_start, 1))
+    return;
+
+  prev_end = *end;
+  mech_text_buffer_iter_previous (&prev_end, 1);
+  ch = mech_text_buffer_iter_get_char (end);
+
+  if (!_text_buffer_is_line_terminator (ch) &&
+      _text_buffer_iter_node_terminates_paragraph (prev_end.iter))
+    {
+      MechTextUserData *end_para, *prev_start_para;
+
+      end_para = _mech_text_buffer_node_get_data (g_sequence_get (end->iter),
+                                                  priv->paragraph_break_id);
+      prev_start_para =
+        _mech_text_buffer_node_get_data (g_sequence_get (prev_start.iter),
+                                         priv->paragraph_break_id);
+
+      if (end_para == prev_start_para)
+        {
+          /* Insertion happened within a paragraph, so ensure
+           * the trailing chunk gets a new paragraph number
+           */
+          paragraph = _text_buffer_next_paragraph (buffer);
+        }
+    }
+
+  if (!paragraph)
+    {
+      MechTextBufferNode *node;
+
+      /* The trailing chunk of the splitted paragraph is now
+       * a continuation of the just inserted piece of text
+       */
+      node = g_sequence_get (prev_end.iter);
+      paragraph = _mech_text_buffer_node_get_data (node,
+                                                   priv->paragraph_break_id);
+    }
+
+  /* Replace paragraph number on all the subsequent paragraph text */
+  mech_text_buffer_paragraph_extents (buffer, end, NULL, &para_end);
+  _mech_text_buffer_store_user_data (buffer, end, &para_end,
+                                     priv->paragraph_break_id, paragraph);
+}
+
 void
 _mech_text_buffer_check_reunite_nodes (MechTextBuffer *buffer,
                                        MechTextIter   *start,
@@ -676,6 +794,9 @@ mech_text_buffer_finalize (GObject *object)
   MechTextBufferPrivate *priv;
 
   priv = mech_text_buffer_get_instance_private ((MechTextBuffer *) object);
+  mech_text_buffer_unregister_data ((MechTextBuffer *) object,
+                                    object, priv->paragraph_break_id);
+
   g_array_unref (priv->registered_data);
   g_sequence_free (priv->buffer);
   g_ptr_array_unref (priv->strings);
@@ -693,6 +814,7 @@ _mech_text_buffer_insert_impl (MechTextBuffer *buffer,
   GSequenceIter *insert_pos, *last = NULL;
   MechTextBufferNode *new, *node = NULL;
   MechStoredString *stored = NULL;
+  MechTextUserData *paragraph;
   MechTextBufferPrivate *priv;
   GArray *data_array = NULL;
   gboolean is_first = TRUE;
@@ -744,7 +866,40 @@ _mech_text_buffer_insert_impl (MechTextBuffer *buffer,
       data_array = g_array_ref (node->data);
     }
 
+  paragraph = _text_buffer_find_paragraph (buffer, &insert);
+
+  while ((next = _find_next_paragraph_break (str)) != NULL)
+    {
+      if (paragraph)
+        _mech_text_user_data_ref (paragraph);
+      else
+        paragraph = _text_buffer_next_paragraph (buffer);
+
+      new = _mech_text_buffer_node_new (stored, str - stored->string->str,
+                                        next - str, data_array);
+      last = g_sequence_insert_before (insert_pos, new);
+
+      if (is_first)
+        {
+          INITIALIZE_ITER (start, buffer, last, 0);
+          is_first = FALSE;
+        }
+
+      _mech_text_buffer_node_set_data (new, buffer,
+                                       priv->paragraph_break_id,
+                                       paragraph);
+
+      _mech_text_user_data_unref (paragraph);
+      paragraph = NULL;
+      str = next;
+    }
+
   INITIALIZE_ITER (end, buffer, insert_pos, 0);
+
+  /* Check paragraph number on trailing text after
+   * the inserted text, as it might have changed
+   */
+  _text_buffer_check_trailing_paragraph (buffer, start, end);
 
   if (data_array)
     g_array_unref (data_array);
@@ -764,6 +919,7 @@ _mech_text_buffer_delete_impl (MechTextBuffer *buffer,
   /* Both iters point now to the same position */
   INITIALIZE_ITER (start, buffer, delete_end, 0);
   INITIALIZE_ITER (end, buffer, delete_end, 0);
+  _text_buffer_check_trailing_paragraph (buffer, end, end);
 }
 
 static void
@@ -810,6 +966,8 @@ mech_text_buffer_init (MechTextBuffer *buffer)
   priv->buffer = g_sequence_new ((GDestroyNotify) _mech_text_buffer_node_free);
   priv->registered_data =
     g_array_new (FALSE, FALSE, sizeof (MechTextRegisteredData));
+  priv->paragraph_break_id =
+    mech_text_buffer_register_data (buffer, buffer, G_TYPE_UINT);
 }
 
 MechTextBuffer *
@@ -1304,6 +1462,66 @@ mech_text_buffer_set_data (MechTextBuffer *buffer,
     *end = major;
 }
 
+void
+mech_text_buffer_paragraph_extents (MechTextBuffer     *buffer,
+                                    const MechTextIter *iter,
+                                    MechTextIter       *paragraph_start,
+                                    MechTextIter       *paragraph_end)
+{
+  MechTextBufferNode *iter_node, *node;
+  GSequenceIter *check_iter;
+  guint para, check;
+
+  g_return_if_fail (MECH_IS_TEXT_BUFFER (buffer));
+  g_return_if_fail (IS_VALID_ITER (iter, buffer));
+
+  if (g_sequence_iter_is_end (iter->iter))
+    {
+      if (paragraph_start)
+        *paragraph_start = *iter;
+      if (paragraph_end)
+        *paragraph_end = *iter;
+      return;
+    }
+
+  iter_node = g_sequence_get (iter->iter);
+  para = _mech_text_buffer_node_get_paragraph (buffer, iter_node);
+
+  if (paragraph_start)
+    {
+      check_iter = g_sequence_iter_prev (iter->iter);
+      INITIALIZE_ITER (paragraph_start, buffer, iter->iter, 0);
+
+      while (!g_sequence_iter_is_begin (paragraph_start->iter))
+        {
+          node = g_sequence_get (check_iter);
+          check = _mech_text_buffer_node_get_paragraph (buffer, node);
+
+          if (check != para)
+            break;
+
+          paragraph_start->iter = check_iter;
+          check_iter = g_sequence_iter_prev (check_iter);
+        }
+    }
+
+  if (paragraph_end)
+    {
+      INITIALIZE_ITER (paragraph_end, buffer, iter->iter, 0);
+
+      while (!g_sequence_iter_is_end (paragraph_end->iter))
+        {
+          node = g_sequence_get (paragraph_end->iter);
+          check = _mech_text_buffer_node_get_paragraph (buffer, node);
+
+          if (check != para)
+            break;
+
+          paragraph_end->iter = g_sequence_iter_next (paragraph_end->iter);
+        }
+    }
+}
+
 gboolean
 mech_text_buffer_find_forward (MechTextIter     *iter,
                                MechTextFindFunc  func,
@@ -1463,6 +1681,34 @@ mech_text_buffer_iter_move_bytes (MechTextIter *iter,
   return remaining == 0;
 }
 
+gboolean
+mech_text_buffer_iter_next_paragraph (MechTextBuffer *buffer,
+                                      MechTextIter   *iter)
+{
+  MechTextBufferPrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_TEXT_BUFFER (buffer), FALSE);
+  g_return_val_if_fail (IS_VALID_ITER (iter, buffer), FALSE);
+
+  priv = mech_text_buffer_get_instance_private (buffer);
+  return mech_text_buffer_iter_next_section (iter, NULL,
+                                             priv->paragraph_break_id);
+}
+
+gboolean
+mech_text_buffer_iter_previous_paragraph (MechTextBuffer *buffer,
+                                          MechTextIter   *iter)
+{
+  MechTextBufferPrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_TEXT_BUFFER (buffer), FALSE);
+  g_return_val_if_fail (IS_VALID_ITER (iter, buffer), FALSE);
+
+  priv = mech_text_buffer_get_instance_private (buffer);
+  return mech_text_buffer_iter_previous_section (iter, NULL,
+                                                 priv->paragraph_break_id);
+}
+
 typedef struct
 {
   guint count;
@@ -1539,6 +1785,93 @@ mech_text_buffer_iter_get_char (MechTextIter *iter)
     return 0;
 
   return g_utf8_get_char (ITER_STRING (iter));
+}
+
+gboolean
+mech_text_buffer_iter_next_section (MechTextIter       *iter,
+                                    const MechTextIter *limit,
+                                    guint               id)
+{
+  MechTextUserData *user_data, *check;
+  MechTextBufferNode *node;
+
+  g_return_val_if_fail (IS_VALID_ITER (iter, NULL), FALSE);
+  g_return_val_if_fail (!limit || IS_VALID_ITER (limit, iter->buffer), FALSE);
+
+  if ((limit && mech_text_buffer_iter_compare (iter, limit) == 0) ||
+      g_sequence_iter_is_end (iter->iter))
+    return FALSE;
+
+  node = g_sequence_get (iter->iter);
+  check = _mech_text_buffer_node_get_data (node, id);
+
+  while (!g_sequence_iter_is_end (iter->iter))
+    {
+      node = g_sequence_get (iter->iter);
+      user_data = _mech_text_buffer_node_get_data (node, id);
+
+      if (check != user_data)
+        return TRUE;
+
+      if (limit && limit->iter == iter->iter)
+        {
+          *iter = *limit;
+          break;
+        }
+
+      iter->iter = g_sequence_iter_next (iter->iter);
+      iter->pos = 0;
+    }
+
+  return FALSE;
+}
+
+gboolean
+mech_text_buffer_iter_previous_section (MechTextIter       *iter,
+                                        const MechTextIter *limit,
+                                        guint               id)
+{
+  MechTextUserData *user_data, *check = NULL;
+  MechTextBufferNode *node;
+
+  g_return_val_if_fail (IS_VALID_ITER (iter, NULL), FALSE);
+  g_return_val_if_fail (!limit || IS_VALID_ITER (limit, iter->buffer), FALSE);
+
+  if ((limit && mech_text_buffer_iter_compare (iter, limit) == 0) ||
+      g_sequence_iter_is_begin (iter->iter))
+    return FALSE;
+
+  if (!g_sequence_iter_is_end (iter->iter))
+    {
+      node = g_sequence_get (iter->iter);
+      check = _mech_text_buffer_node_get_data (node, id);
+    }
+
+  while (TRUE)
+    {
+      if (!g_sequence_iter_is_end (iter->iter))
+        {
+          node = g_sequence_get (iter->iter);
+          user_data = _mech_text_buffer_node_get_data (node, id);
+
+          if (check != user_data)
+            return TRUE;
+        }
+
+      if (limit && limit->iter == iter->iter)
+        {
+          *iter = *limit;
+          break;
+        }
+
+      if (g_sequence_iter_is_begin (iter->iter))
+        break;
+
+      iter->iter = g_sequence_iter_prev (iter->iter);
+      iter->pos = 0;
+    }
+
+  return FALSE;
 }
 
 gssize

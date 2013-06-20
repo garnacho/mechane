@@ -98,6 +98,11 @@ gssize           mech_text_buffer_get_byte_offset   (MechTextBuffer     *buffer,
                                                      const MechTextIter *end);
 
 /* Iterators */
+void             mech_text_buffer_paragraph_extents (MechTextBuffer     *buffer,
+                                                     const MechTextIter *iter,
+                                                     MechTextIter       *paragraph_start,
+                                                     MechTextIter       *paragraph_end);
+
 gboolean         mech_text_buffer_find_forward  (MechTextIter     *iter,
                                                  MechTextFindFunc  func,
                                                  gpointer          user_data);
@@ -107,6 +112,11 @@ gboolean         mech_text_buffer_find_backward (MechTextIter     *iter,
 
 gboolean         mech_text_buffer_iter_move_bytes (MechTextIter *iter,
                                                    gssize        bytes);
+
+gboolean         mech_text_buffer_iter_next_paragraph     (MechTextBuffer *buffer,
+                                                           MechTextIter   *iter);
+gboolean         mech_text_buffer_iter_previous_paragraph (MechTextBuffer *buffer,
+                                                           MechTextIter   *iter);
 
 gint             mech_text_buffer_iter_compare  (const MechTextIter *a,
                                                  const MechTextIter *b);
@@ -121,6 +131,12 @@ gboolean         mech_text_buffer_iter_is_end   (MechTextIter     *iter);
 
 gunichar         mech_text_buffer_iter_get_char (MechTextIter     *iter);
 
+gboolean         mech_text_buffer_iter_next_section     (MechTextIter       *iter,
+                                                         const MechTextIter *limit,
+                                                         guint               id);
+gboolean         mech_text_buffer_iter_previous_section (MechTextIter       *iter,
+                                                         const MechTextIter *limit,
+                                                         guint               id);
 
 /* User data */
 guint            mech_text_buffer_register_data       (MechTextBuffer *buffer,
