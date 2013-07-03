@@ -41,6 +41,7 @@ G_BEGIN_DECLS
 #include <mechane/mech-orientable.h>
 #include <mechane/mech-scrollable.h>
 #include <mechane/mech-toggle.h>
+#include <mechane/mech-text.h>
 
 /* Animations */
 #include <mechane/mech-animation.h>

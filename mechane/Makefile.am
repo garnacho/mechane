@@ -40,6 +40,7 @@ mech_sources = 			\
 	mech-stage.c		\
 	mech-style.c		\
 	mech-surface.c		\
+	mech-text.c		\
 	mech-text-buffer.c	\
 	mech-text-range.c	\
 	mech-theme.c		\
