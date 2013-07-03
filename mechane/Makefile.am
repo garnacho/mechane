@@ -41,6 +41,7 @@ mech_sources = 			\
 	mech-style.c		\
 	mech-surface.c		\
 	mech-text-buffer.c	\
+	mech-text-range.c	\
 	mech-theme.c		\
 	mech-toggle.c		\
 	mech-toggle-button.c	\
