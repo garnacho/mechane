@@ -64,6 +64,7 @@ G_BEGIN_DECLS
 
 #include <mechane/mech-text-buffer.h>
 #include <mechane/mech-text-range.h>
+#include <mechane/mech-text-view.h>
 
 /* High-level widgets */
 #include <mechane/mech-image.h>
