@@ -20,6 +20,7 @@
 
 #include <mechane/mech-view.h>
 #include <mechane/mech-text-buffer.h>
+#include <mechane/mech-text-attributes.h>
 
 G_BEGIN_DECLS
 
@@ -45,6 +46,18 @@ struct _MechTextViewClass
 
 GType                mech_text_view_get_type             (void) G_GNUC_CONST;
 MechArea *           mech_text_view_new                  (void);
+
+/* Text style */
+void                 mech_text_view_combine_attributes   (MechTextView            *view,
+                                                          MechTextIter            *start,
+                                                          MechTextIter            *end,
+                                                          MechTextAttributes      *attributes);
+void                 mech_text_view_unset_attributes     (MechTextView            *view,
+                                                          MechTextIter            *start,
+                                                          MechTextIter            *end,
+                                                          MechTextAttributeFields  fields);
+MechTextAttributes * mech_text_view_get_attributes       (MechTextView            *view,
+                                                          MechTextIter            *iter);
 
 G_END_DECLS
 

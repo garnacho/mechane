@@ -73,6 +73,7 @@ struct _MechTextViewPrivate
   MechTextBuffer *buffer;
   guint paragraph_layout_id;
   guint paragraph_extents_id;
+  guint text_style_id;
   gdouble layout_width;
 
   gssize buffer_bytes;
@@ -96,6 +97,186 @@ _text_iterator_free (TextIterator *iterator)
     iterator->destroy_notify (iterator->user_data);
 
   g_slice_free (TextIterator, iterator);
+}
+
+/* Style iterator */
+static TextIterator *
+_style_iterator_new (MechTextView        *view,
+                     MechTextIter        *start,
+                     MechTextIter        *end,
+                     IteratorForeachFunc  func,
+                     gpointer             user_data)
+{
+  MechTextViewPrivate *priv;
+  TextIterator *iterator;
+
+  priv = mech_text_view_get_instance_private (view);
+  iterator = g_slice_new0 (TextIterator);
+  iterator->func = func;
+  iterator->user_data = user_data;
+  iterator->view = view;
+
+  if (start)
+    iterator->start = *start;
+  if (end)
+    iterator->end = *end;
+  if (!start || !end)
+    mech_text_buffer_get_bounds (priv->buffer,
+                                 &iterator->start, &iterator->end);
+
+  iterator->current = iterator->start;
+
+  return iterator;
+}
+
+static gboolean
+_style_iterator_next_run (TextIterator *iterator)
+{
+  MechTextViewPrivate *priv;
+  gboolean cont, retval;
+  MechTextIter next;
+
+  if (mech_text_buffer_iter_is_end (&iterator->current))
+    return FALSE;
+
+  priv = mech_text_view_get_instance_private (iterator->view);
+  next = iterator->current;
+  cont = mech_text_buffer_iter_next_section (&next, &iterator->end,
+                                             priv->text_style_id);
+  retval = iterator->func (iterator->view, &iterator->current,
+                           &next, iterator->user_data);
+  iterator->current = next;
+
+  if (!cont)
+    return FALSE;
+
+  return retval;
+}
+
+static gboolean
+_mech_text_view_compose_style (MechTextView *view,
+                               MechTextIter *start,
+                               MechTextIter *end,
+                               gpointer      user_data)
+{
+  PangoAttrList **list = user_data;
+  PangoFontDescription *font_desc;
+  MechTextAttributes *attributes;
+  guint offset_start, offset_end;
+  MechTextViewPrivate *priv;
+  MechTextIter para_start;
+  PangoAttribute *attr;
+  MechColor *bg, *fg;
+
+  priv = mech_text_view_get_instance_private (view);
+  mech_text_buffer_get_data (priv->buffer, start,
+                             priv->text_style_id,
+                             &attributes, 0);
+  if (!attributes)
+    return TRUE;
+
+  if (!*list)
+    *list = pango_attr_list_new ();
+
+  mech_text_buffer_paragraph_extents (priv->buffer, start, &para_start, NULL);
+  offset_start = mech_text_buffer_get_byte_offset (priv->buffer, &para_start, start);
+  offset_end = mech_text_buffer_get_byte_offset (priv->buffer, &para_start, end);
+
+  g_object_get (attributes,
+                "font-description", &font_desc,
+                "background", &bg,
+                "foreground", &fg,
+                NULL);
+
+  if (font_desc)
+    {
+      attr = pango_attr_font_desc_new (font_desc);
+      attr->start_index = offset_start;
+      attr->end_index = offset_end;
+      pango_attr_list_insert (*list, attr);
+      pango_font_description_free (font_desc);
+    }
+
+  if (bg)
+    {
+      attr = pango_attr_background_new (CLAMP (bg->r * 65535 + 0.5, 0, 65535),
+                                        CLAMP (bg->g * 65535 + 0.5, 0, 65535),
+                                        CLAMP (bg->b * 65535 + 0.5, 0, 65535));
+      attr->start_index = offset_start;
+      attr->end_index = offset_end;
+      pango_attr_list_insert (*list, attr);
+      mech_color_free (bg);
+    }
+
+  if (fg)
+    {
+      attr = pango_attr_foreground_new (CLAMP (fg->r * 65535 + 0.5, 0, 65535),
+                                        CLAMP (fg->g * 65535 + 0.5, 0, 65535),
+                                        CLAMP (fg->b * 65535 + 0.5, 0, 65535));
+      attr->start_index = offset_start;
+      attr->end_index = offset_end;
+      pango_attr_list_insert (*list, attr);
+      mech_color_free (fg);
+    }
+
+  return TRUE;
+}
+
+static void
+_mech_text_view_update_style (MechTextView *view,
+                              PangoLayout  *layout,
+                              MechTextIter *start,
+                              MechTextIter *end)
+{
+  PangoAttrList *list = NULL;
+  MechTextViewPrivate *priv;
+  MechTextIter layout_end;
+  TextIterator *iterator;
+  gchar *text;
+
+  priv = mech_text_view_get_instance_private (view);
+  layout_end = *end;
+
+  if (!mech_text_buffer_iter_is_end (end))
+    {
+      gunichar ch;
+
+      /* Intermediate layouts get the last line/paragraph
+       * break removed, as the next layout has to be visually
+       * rendered as if starting on the same last line.
+       */
+      mech_text_buffer_iter_previous (&layout_end, 1);
+
+      ch = mech_text_buffer_iter_get_char (&layout_end);
+
+      if (ch == '\n')
+        {
+          /* check for \r */
+          mech_text_buffer_iter_previous (&layout_end, 1);
+          ch = mech_text_buffer_iter_get_char (&layout_end);
+
+          if (ch != '\r')
+            mech_text_buffer_iter_next (&layout_end, 1);
+        }
+    }
+
+  text = mech_text_buffer_get_text (priv->buffer, start, &layout_end);
+  pango_layout_set_text (layout, text, -1);
+  g_free (text);
+
+  iterator = _style_iterator_new (view, start, end,
+                                  _mech_text_view_compose_style,
+                                  &list);
+  while (_style_iterator_next_run (iterator))
+    ;
+
+  _text_iterator_free (iterator);
+
+  if (list)
+    {
+      pango_layout_set_attributes (layout, list);
+      pango_attr_list_unref (list);
+    }
 }
 
 /* Per-paragraph iterator */
@@ -221,7 +402,11 @@ _text_view_paragraph_calc_extents (MechTextView *view,
         }
       else
         layout = data->calc_layout;
+
+      _mech_text_view_update_style (view, layout, start, end);
     }
+  else if (data->force_update)
+    _mech_text_view_update_style (view, layout, start, end);
 
   pango_layout_set_width (layout, data->width * PANGO_SCALE);
   pango_layout_get_pixel_size (layout, NULL, &layout_height);
@@ -688,6 +873,7 @@ _text_view_store_layout (MechTextView *view,
   context = mech_renderer_get_font_context (renderer);
 
   layout = pango_layout_new (context);
+  _mech_text_view_update_style (view, layout, start, end);
   pango_layout_set_width (layout, priv->layout_width * PANGO_SCALE);
 
   mech_text_buffer_set_data (priv->buffer, start, end,
@@ -1115,6 +1301,9 @@ _mech_text_view_set_buffer (MechTextView   *view,
       priv->paragraph_extents_id =
         mech_text_buffer_register_data (priv->buffer, view,
                                         CAIRO_GOBJECT_TYPE_RECTANGLE);
+      priv->text_style_id =
+        mech_text_buffer_register_data (priv->buffer, view,
+                                        MECH_TYPE_TEXT_ATTRIBUTES);
 
       mech_text_buffer_get_bounds (priv->buffer, &start, NULL);
 
@@ -1178,4 +1367,119 @@ MechArea *
 mech_text_view_new (void)
 {
   return g_object_new (MECH_TYPE_TEXT_VIEW, NULL);
+}
+
+static gboolean
+_text_view_combine_section_attributes (MechTextView *view,
+                                       MechTextIter *start,
+                                       MechTextIter *end,
+                                       gpointer      user_data)
+{
+  MechTextAttributes *attributes, *copy;
+  MechTextViewPrivate *priv;
+
+  /* Always replace attributes on the section, as start
+   * or end might fall in the middle of a style section,
+   * and we want to leave outer sides untouched.
+   */
+  copy = mech_text_attributes_new ();
+  priv = mech_text_view_get_instance_private (view);
+  mech_text_buffer_get_data (priv->buffer, start,
+                             priv->text_style_id,
+                             &attributes, 0);
+  if (attributes)
+    mech_text_attributes_combine (copy, attributes);
+
+  mech_text_attributes_combine (copy, user_data);
+  mech_text_buffer_set_data (priv->buffer, start, end,
+                             priv->text_style_id, copy,
+                             0);
+  g_object_unref (copy);
+
+  return TRUE;
+}
+
+static gboolean
+_text_view_unset_section_attributes (MechTextView *view,
+                                     MechTextIter *start,
+                                     MechTextIter *end,
+                                     gpointer      user_data)
+{
+  MechTextAttributes *attributes;
+  MechTextViewPrivate *priv;
+
+  priv = mech_text_view_get_instance_private (view);
+  mech_text_buffer_get_data (priv->buffer, start,
+                             priv->text_style_id, &attributes, 0);
+
+  if (attributes)
+    mech_text_attributes_unset_fields (attributes, GPOINTER_TO_INT (user_data));
+
+  return TRUE;
+}
+
+void
+mech_text_view_combine_attributes (MechTextView       *view,
+                                   MechTextIter       *start,
+                                   MechTextIter       *end,
+                                   MechTextAttributes *attributes)
+{
+  TextIterator *iterator;
+
+  g_return_if_fail (MECH_IS_TEXT_VIEW (view));
+  g_return_if_fail (MECH_IS_TEXT_ATTRIBUTES (attributes));
+  g_return_if_fail (start != NULL);
+  g_return_if_fail (end != NULL);
+
+  iterator = _style_iterator_new (view, start, end,
+                                  _text_view_combine_section_attributes,
+                                  attributes);
+
+  while (_style_iterator_next_run (iterator))
+    ;
+
+  _text_iterator_free (iterator);
+}
+
+void
+mech_text_view_unset_attributes (MechTextView            *view,
+                                 MechTextIter            *start,
+                                 MechTextIter            *end,
+                                 MechTextAttributeFields  fields)
+{
+  TextIterator *iterator;
+
+  g_return_if_fail (MECH_IS_TEXT_VIEW (view));
+  g_return_if_fail (start != NULL);
+  g_return_if_fail (end != NULL);
+
+  iterator = _style_iterator_new (view, start, end,
+                                  _text_view_unset_section_attributes,
+                                  GUINT_TO_POINTER (fields));
+
+  while (_style_iterator_next_run (iterator))
+    ;
+
+  _text_iterator_free (iterator);
+}
+
+MechTextAttributes *
+mech_text_view_get_attributes (MechTextView *view,
+                               MechTextIter *iter)
+{
+  MechTextAttributes *attributes, *copy;
+  MechTextViewPrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_TEXT_VIEW (view), NULL);
+  g_return_val_if_fail (iter != NULL, NULL);
+
+  priv = mech_text_view_get_instance_private (view);
+  copy = mech_text_attributes_new ();
+
+  mech_text_buffer_get_data (priv->buffer, iter,
+                             priv->text_style_id, &attributes, 0);
+  if (attributes)
+    mech_text_attributes_combine (copy, attributes);
+
+  return copy;
 }
