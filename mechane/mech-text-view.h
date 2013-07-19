@@ -47,6 +47,14 @@ struct _MechTextViewClass
 GType                mech_text_view_get_type             (void) G_GNUC_CONST;
 MechArea *           mech_text_view_new                  (void);
 
+gboolean             mech_text_view_get_iter_at_point    (MechTextView       *view,
+                                                          MechPoint          *point,
+                                                          MechTextIter       *iter);
+gboolean             mech_text_view_get_cursor_locations (MechTextView       *view,
+                                                          const MechTextIter *iter,
+                                                          cairo_rectangle_t  *strong,
+                                                          cairo_rectangle_t  *weak);
+
 /* Text style */
 void                 mech_text_view_combine_attributes   (MechTextView            *view,
                                                           MechTextIter            *start,

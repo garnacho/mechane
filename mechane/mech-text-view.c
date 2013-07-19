@@ -1370,6 +1370,147 @@ mech_text_view_new (void)
 }
 
 static gboolean
+_text_view_find_iter (MechTextView *view,
+                      MechTextIter *para_start,
+                      MechTextIter *para_end,
+                      gpointer      user_data)
+{
+  gint x, y, index, trailing, pos;
+  MechTextViewPrivate *priv;
+  cairo_rectangle_t *rect;
+  PangoLayout *layout;
+  FindIterData *data;
+  const gchar *text;
+
+  data = user_data;
+  priv = mech_text_view_get_instance_private (view);
+  mech_text_buffer_get_data (priv->buffer, para_start,
+                             priv->paragraph_layout_id, &layout,
+                             priv->paragraph_extents_id, &rect,
+                             0);
+  if (!rect || !layout)
+    return TRUE;
+
+  if (rect->y + rect->height < data->point.y)
+    return TRUE;
+  else if (rect->y > data->point.y)
+    return FALSE;
+
+  x = (data->point.x - rect->x) * PANGO_SCALE;
+  y = (data->point.y - rect->y) * PANGO_SCALE;
+  pango_layout_xy_to_index (layout, x, y, &index, &trailing);
+
+  if (trailing != 0)
+    index++;
+
+  text = pango_layout_get_text (layout);
+  pos = g_utf8_pointer_to_offset (text, text + index);
+
+  data->iter = *para_start;
+
+  if (!mech_text_buffer_iter_next (&data->iter, pos))
+    return FALSE;
+
+  data->found = TRUE;
+
+  return TRUE;
+}
+
+gboolean
+mech_text_view_get_iter_at_point (MechTextView *view,
+                                  MechPoint    *point,
+                                  MechTextIter *iter)
+{
+  MechTextViewPrivate *priv;
+  MechTextIter start, end;
+  FindIterData data;
+
+  g_return_val_if_fail (MECH_IS_TEXT_VIEW (view), FALSE);
+  g_return_val_if_fail (point != NULL, FALSE);
+  g_return_val_if_fail (iter != NULL, FALSE);
+
+  priv = mech_text_view_get_instance_private (view);
+
+  if (!priv->buffer)
+    return FALSE;
+
+  /* Only the visible bounds have a rect/layout */
+  if (!mech_text_range_get_bounds (priv->visible, &start, &end))
+    return FALSE;
+
+  data.point = *point;
+  data.found = FALSE;
+
+  _mech_text_view_paragraph_foreach (view, &start, &end,
+                                     _text_view_find_iter,
+                                     &data);
+  if (data.found && iter)
+    *iter = data.iter;
+
+  return data.found;
+}
+
+gboolean
+mech_text_view_get_cursor_locations (MechTextView       *view,
+                                     const MechTextIter *iter,
+                                     cairo_rectangle_t  *strong,
+                                     cairo_rectangle_t  *weak)
+{
+  MechTextIter para_start, para_end, lookup;
+  PangoRectangle strong_pos, weak_pos;
+  MechTextViewPrivate *priv;
+  cairo_rectangle_t *rect;
+  PangoLayout *layout;
+  gint index;
+
+  g_return_val_if_fail (MECH_IS_TEXT_VIEW (view), FALSE);
+  g_return_val_if_fail (iter != NULL, FALSE);
+
+  priv = mech_text_view_get_instance_private (view);
+  lookup = *iter;
+
+  if (g_sequence_iter_is_end (lookup.iter))
+    {
+      /* The end iter doesn't truly pertain to any paragraph, so render
+       * the cursor at the last byte index of the previous layout.
+       */
+      mech_text_buffer_iter_previous (&lookup, 1);
+    }
+
+  mech_text_buffer_paragraph_extents (priv->buffer, &lookup,
+                                      &para_start, &para_end);
+  index = mech_text_buffer_get_byte_offset (priv->buffer, &para_start, iter);
+
+  mech_text_buffer_get_data (priv->buffer, &lookup,
+                             priv->paragraph_layout_id, &layout,
+                             priv->paragraph_extents_id, &rect,
+                             0);
+  if (!layout || !rect)
+    return FALSE;
+
+  pango_layout_get_cursor_pos (layout, index,
+                               (strong) ? &strong_pos : NULL,
+                               (weak) ? &weak_pos : NULL);
+  if (strong)
+    {
+      strong->x = (strong_pos.x / PANGO_SCALE) + rect->x;
+      strong->y = (strong_pos.y / PANGO_SCALE) + rect->y;
+      strong->width = strong_pos.width / PANGO_SCALE;
+      strong->height = strong_pos.height / PANGO_SCALE;
+    }
+
+  if (weak)
+    {
+      weak->x = (weak_pos.x / PANGO_SCALE) + rect->x;
+      weak->y = (weak_pos.y / PANGO_SCALE) + rect->y;
+      weak->width = weak_pos.width / PANGO_SCALE;
+      weak->height = weak_pos.height / PANGO_SCALE;
+    }
+
+  return TRUE;
+}
+
+static gboolean
 _text_view_combine_section_attributes (MechTextView *view,
                                        MechTextIter *start,
                                        MechTextIter *end,
