@@ -16,6 +16,7 @@ mech_sources = 			\
 	mech-backend.c		\
 	mech-button.c		\
 	mech-clock.c		\
+	mech-check-mark.c	\
 	mech-controller.c	\
 	mech-cursor.c		\
 	mech-events.c		\
