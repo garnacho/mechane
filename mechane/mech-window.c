@@ -994,6 +994,7 @@ mech_window_set_title (MechWindow  *window,
     }
 
   MECH_WINDOW_GET_CLASS (window)->set_title (window, priv->title);
+  mech_text_set_string (MECH_TEXT (priv->frame), title);
 }
 
 const gchar *

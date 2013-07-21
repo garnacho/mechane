@@ -20,6 +20,8 @@
 #include "mech-linear-box.h"
 #include "mech-toggle-button.h"
 #include "mech-toggle.h"
+#include "mech-text.h"
+#include "mech-text-view.h"
 #include "mech-window-frame-private.h"
 
 #define DRAG_CORNER_SIZE 20
@@ -40,6 +42,7 @@ enum {
 
 struct _MechWindowFramePrivate
 {
+  MechArea *title;
   MechArea *close_button;
   MechArea *maximize_toggle_button;
   MechArea *container;
@@ -48,8 +51,10 @@ struct _MechWindowFramePrivate
 
 static guint signals[LAST_SIGNAL] = { 0 };
 
-G_DEFINE_TYPE_WITH_PRIVATE (MechWindowFrame, mech_window_frame,
-                            MECH_TYPE_FIXED_BOX)
+G_DEFINE_TYPE_WITH_CODE (MechWindowFrame, mech_window_frame,
+                         MECH_TYPE_FIXED_BOX,
+                         G_ADD_PRIVATE (MechWindowFrame)
+                         G_IMPLEMENT_INTERFACE (MECH_TYPE_TEXT, NULL))
 
 static void
 mech_window_frame_get_property (GObject    *object,
@@ -60,6 +65,9 @@ mech_window_frame_get_property (GObject    *object,
   MechWindowFramePrivate *priv;
 
   priv = mech_window_frame_get_instance_private ((MechWindowFrame *) object);
+
+  if (mech_area_get_delegate_property (MECH_AREA (object), pspec, value))
+    return;
 
   switch (prop_id)
     {
@@ -86,6 +94,9 @@ mech_window_frame_set_property (GObject *object,
   MechWindowFramePrivate *priv;
 
   priv = mech_window_frame_get_instance_private ((MechWindowFrame *) object);
+
+  if (mech_area_set_delegate_property (MECH_AREA (object), pspec, value))
+    return;
 
   switch (prop_id)
     {
@@ -277,6 +288,10 @@ mech_window_frame_class_init (MechWindowFrameClass *klass)
                   NULL, NULL,
                   g_cclosure_marshal_VOID__VOID,
                   G_TYPE_NONE, 0);
+
+  mech_area_class_set_delegate (MECH_AREA_CLASS (klass),
+				MECH_TYPE_TEXT,
+				G_PRIVATE_OFFSET (MechWindowFrame, title));
 }
 
 static void
@@ -351,6 +366,16 @@ mech_window_frame_init (MechWindowFrame *frame)
   mech_area_add (box, priv->close_button);
   g_signal_connect_swapped (priv->close_button, "activated",
                             G_CALLBACK (_close_button_activated), frame);
+
+  /* Title */
+  priv->title = mech_text_view_new ();
+  mech_area_set_parent (priv->title, area);
+
+  mech_fixed_box_attach (MECH_FIXED_BOX (area), priv->title,
+                         MECH_SIDE_TOP, MECH_SIDE_TOP, MECH_UNIT_PX, 0);
+  mech_fixed_box_attach (MECH_FIXED_BOX (area), priv->title,
+                         MECH_SIDE_LEFT, MECH_SIDE_LEFT,
+                         MECH_UNIT_PX, DRAG_CORNER_SIZE);
 }
 
 MechArea *
