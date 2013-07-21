@@ -44,6 +44,7 @@
    (m).x0 == 0 && (m).y0 == 0)
 
 typedef struct _MechAreaPrivate MechAreaPrivate;
+typedef struct _MechAreaDelegateData MechAreaDelegateData;
 typedef struct _PreferredAxisSize PreferredAxisSize;
 
 enum {
@@ -103,6 +104,14 @@ struct _MechAreaPrivate
   guint need_width_request  : 1;
   guint need_height_request : 1;
   guint need_allocate_size  : 1;
+};
+
+struct _MechAreaDelegateData
+{
+  guint property_offset;
+
+  /* GType -> delegate object offset in priv struct */
+  GHashTable *delegates;
 };
 
 static guint signals[LAST_SIGNAL] = { 0 };
@@ -2051,4 +2060,119 @@ mech_area_get_cursor (MechArea *area)
 
   priv = mech_area_get_instance_private (area);
   return priv->pointer_cursor;
+}
+
+/* Interface delegates */
+static MechAreaDelegateData *
+_mech_area_delegate_data_new (void)
+{
+  MechAreaDelegateData *data;
+
+  data = g_new0 (MechAreaDelegateData, 1);
+  data->property_offset = G_MAXUINT / 2;
+  data->delegates = g_hash_table_new (NULL, NULL);
+
+  return data;
+}
+
+void
+mech_area_class_set_delegate (MechAreaClass *area_class,
+                              GType          iface_type,
+                              gssize         delegate_offset)
+{
+  GParamSpec **iface_properties;
+  MechAreaDelegateData *data;
+  guint n_properties, i;
+  gpointer g_iface;
+
+  g_return_if_fail (MECH_IS_AREA_CLASS (area_class));
+  g_return_if_fail (g_type_is_a (iface_type, G_TYPE_INTERFACE));
+  g_return_if_fail (g_type_is_a (G_TYPE_FROM_CLASS (area_class), iface_type));
+
+  g_iface = g_type_interface_peek (area_class, iface_type);
+  iface_properties = g_object_interface_list_properties (g_iface,
+                                                         &n_properties);
+
+  if (area_class->delegate_data)
+    data = area_class->delegate_data;
+  else
+    area_class->delegate_data = data = _mech_area_delegate_data_new ();
+
+  for (i = 0; i < n_properties; i++)
+    {
+      iface_properties[i] = g_param_spec_override (iface_properties[i]->name,
+                                                   iface_properties[i]);
+      g_object_class_install_property (G_OBJECT_CLASS (area_class),
+				       data->property_offset++,
+                                       iface_properties[i]);
+    }
+
+  g_hash_table_insert (data->delegates,
+                       GSIZE_TO_POINTER (iface_type),
+                       GSIZE_TO_POINTER (delegate_offset));
+}
+
+static gboolean
+_mech_area_update_delegate_property (MechArea   *area,
+                                     GParamSpec *pspec,
+                                     GValue     *value,
+                                     gboolean    set)
+{
+  MechAreaDelegateData *data;
+  MechAreaClass *area_class;
+  MechArea *delegate;
+  gpointer offset;
+
+  area_class = MECH_AREA_GET_CLASS (area);
+  data = area_class->delegate_data;
+
+  if (!data)
+    return FALSE;
+
+  if (!g_hash_table_lookup_extended (data->delegates,
+                                     GSIZE_TO_POINTER (pspec->owner_type),
+                                     NULL, &offset))
+    return FALSE;
+
+  delegate = *((MechArea **) G_STRUCT_MEMBER_P (area, (gssize) offset));
+
+  if (!delegate || !g_type_is_a (G_OBJECT_TYPE (delegate), pspec->owner_type))
+    {
+      g_critical ("Invalid delegate %s (at offset %li in object data) for interface %s\n",
+                  G_OBJECT_TYPE_NAME (delegate), (gssize) offset,
+                  g_type_name (pspec->owner_type));
+      return FALSE;
+    }
+
+  if (set)
+    g_object_set_property ((GObject *) delegate, pspec->name, value);
+  else
+    g_object_get_property ((GObject *) delegate, pspec->name, value);
+
+  return TRUE;
+}
+
+gboolean
+mech_area_get_delegate_property (MechArea   *area,
+                                 GParamSpec *pspec,
+                                 GValue     *value)
+{
+  g_return_val_if_fail (MECH_IS_AREA (area), FALSE);
+  g_return_val_if_fail (G_IS_PARAM_SPEC (pspec), FALSE);
+  g_return_val_if_fail (G_IS_VALUE (value), FALSE);
+
+  return _mech_area_update_delegate_property (area, pspec, value, FALSE);
+}
+
+gboolean
+mech_area_set_delegate_property (MechArea     *area,
+                                 GParamSpec   *pspec,
+                                 const GValue *value)
+{
+  g_return_val_if_fail (MECH_IS_AREA (area), FALSE);
+  g_return_val_if_fail (G_IS_PARAM_SPEC (pspec), FALSE);
+  g_return_val_if_fail (G_IS_VALUE (value), FALSE);
+
+  return _mech_area_update_delegate_property (area, pspec,
+                                              (GValue *) value, TRUE);
 }

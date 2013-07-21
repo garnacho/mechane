@@ -48,6 +48,7 @@ struct _MechArea
 struct _MechAreaClass
 {
   GInitiallyUnownedClass parent_class;
+  gpointer delegate_data;
 
   void             (* draw)               (MechArea  *area,
                                            cairo_t   *cr);
@@ -196,6 +197,18 @@ cairo_region_t * mech_area_get_shape            (MechArea          *area);
 void             mech_area_set_cursor           (MechArea          *area,
                                                  MechCursor        *cursor);
 MechCursor     * mech_area_get_cursor           (MechArea          *area);
+
+/* Interface delegates */
+void             mech_area_class_set_delegate    (MechAreaClass    *area_class,
+                                                  GType             iface_type,
+                                                  gssize            delegate_offset);
+
+gboolean         mech_area_get_delegate_property (MechArea         *area,
+                                                  GParamSpec       *pspec,
+                                                  GValue           *value);
+gboolean         mech_area_set_delegate_property (MechArea         *area,
+                                                  GParamSpec       *pspec,
+                                                  const GValue     *value);
 
 G_END_DECLS
 
