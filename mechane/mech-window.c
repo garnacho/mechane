@@ -765,6 +765,33 @@ window_frame_maximize_toggle (MechWindowFrame *frame,
     mech_window_pop_state (window);
 }
 
+static MechStyle *
+_load_default_style (void)
+{
+  GError *error = NULL;
+  MechTheme *theme;
+  MechStyle *style;
+  GFile *file;
+
+  style = mech_style_new ();
+  theme = mech_theme_new ();
+
+  file = g_file_new_for_uri ("resource://org/mechane/libmechane/DefaultTheme/style");
+  mech_theme_load_style_from_file (theme, style, file, &error);
+  g_object_unref (file);
+  g_object_unref (theme);
+
+  if (error)
+    {
+      g_warning ("Error loading default theme: %s\n", error->message);
+      g_object_unref (style);
+      g_error_free (error);
+      return NULL;
+    }
+
+  return style;
+}
+
 static void
 mech_window_init (MechWindow *window)
 {
@@ -775,6 +802,14 @@ mech_window_init (MechWindow *window)
   priv->resizable = TRUE;
   priv->stage = _mech_stage_new ();
   priv->frame = mech_window_frame_new ();
+
+  style = _load_default_style ();
+
+  if (style)
+    {
+      mech_window_set_style (window, style);
+      g_object_unref (style);
+    }
 
   _mech_area_make_window_root (priv->frame, window);
 

@@ -1,0 +1,108 @@
+- font: Cantarell 10pt;
+
+window-frame {
+  - background: #949a98;
+  - corner-radius: 6px;
+  - border: #3a5a4b 1px;
+  - foreground: #426a41;
+
+  close-button {
+    - background: #db1204;
+    - background[1]: url("resource://org/mechane/libmechane/DefaultTheme/icons/close-button.svg");
+    - corner-radius: 100px;
+    - border: #9d0817 1px;
+    - margin: 1px;
+  };
+
+  close-button[hovered] {
+    - background: #fb1204;
+    - background[1]: url("resource://org/mechane/libmechane/DefaultTheme/icons/close-button.svg");
+    - corner-radius: 100px;
+    - border: #ad0817 1px;
+    - margin: 1px;
+  };
+
+  close-button[pressed] {
+    - background: pink;
+    - corner-radius: 100px;
+    - border: #ad0817 1px;
+    - margin: 1px;
+  };
+
+  maximize-button {
+    - background: #0312ae;
+    - border: #020492 1px;
+    - margin: 1px;
+  };
+
+  maximize-button[hovered] {
+    - background: #3312ce;
+    - border: #3204b2 1px;
+    - margin: 1px;
+  };
+
+  maximize-button[active] {
+    - background: #03ae12;
+    - border: #029204 1px;
+    - margin: 1px;
+  };
+};
+
+slider {
+  - border[0]: #888 1px;
+  - border[1]: rgba (210, 210, 210, 0.8) 1px;
+  - corner-radius: 6px;
+  - background: rgba (255, 255, 255, 0.5);
+  - margin: 1px;
+
+  handle {
+    - background: rgba (0,0,0,0.6);
+    - corner-radius: 40px;
+    - padding: 2px;
+  };
+
+  handle[hovered] {
+    - background: green;
+  };
+};
+
+toggle-button {
+  - foreground: #131;
+};
+
+toggle-button[active] {
+  - foreground: #ddd;
+  - background: #379;
+};
+
+button {
+  - background: linear 0,0,0,80 { 0%: rgba(80, 140, 170, 1); 100%: rgba (250, 0, 10, 0.6) };
+  - border: linear 0,0,0,100 { 0%: #8a8a8a; 100%: #a9a9a9 } 1px;
+  - border[1]: linear 0,0,0,100 { 0%: #a9a9a9; 100%: #8a8a8a } 1px;
+  - foreground: linear 0,0,50,0 { 0%: #111; 100%: #0a0 };
+  - foreground: #131;
+  - corner-radius: 8px;
+};
+
+button[hovered] {
+  - background: #06b;
+  - border: linear 0,0,0,100 { 0%: #77d; 100%: #00a } 1px;
+  - border[1]: linear 0,0,0,100 { 0%: #00a; 100%: #77d } 1px;
+  - corner-radius: 8px;
+  - foreground: #fff;
+};
+
+button[pressed] {
+  - background: #940;
+  - corner-radius: 8px;
+  - foreground: #fff;
+};
+
+check {
+  - background: url("resource://org/mechane/libmechane/DefaultTheme/icons/check-mark.svg")[bg];
+};
+
+check[active] {
+  - background: url("resource://org/mechane/libmechane/DefaultTheme/icons/check-mark.svg")[bg];
+  - background[1]: url("resource://org/mechane/libmechane/DefaultTheme/icons/check-mark.svg")[active];
+};

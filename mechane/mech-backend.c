@@ -17,6 +17,7 @@
 
 #include <mechane/mech-backend-private.h>
 #include <backends/wayland/mech-backend-wayland.h>
+#include <mechane/mech-resources.h>
 
 G_DEFINE_ABSTRACT_TYPE (MechBackend, mech_backend, G_TYPE_OBJECT)
 

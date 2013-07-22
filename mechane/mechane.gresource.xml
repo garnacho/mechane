@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/org/mechane/libmechane">
+    <file alias="DefaultTheme/style" compressed="true">theme/style</file>
+    <file alias="DefaultTheme/icons/close-button.svg" preprocess="xml-stripblanks" compressed="true">theme/close-button-icon.svg</file>
+    <file alias="DefaultTheme/icons/check-mark.svg" preprocess="xml-stripblanks" compressed="true">theme/check-mark-icon.svg</file>
+  </gresource>
+</gresources>

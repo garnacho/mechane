@@ -4,7 +4,9 @@ BUILT_SOURCES = 		\
 	mech-marshal.c		\
 	mech-marshal.h		\
 	mech-enum-types.c	\
-	mech-enum-types.h
+	mech-enum-types.h	\
+	mech-resources.c	\
+	mech-resources.h
 
 mech_sources = 			\
 	$(BUILT_SOURCES)	\
@@ -74,5 +76,13 @@ mech-marshal.h: mech-marshal.list
 mech-marshal.c: mech-marshal.list
 	$(AM_V_GEN) (echo "#include \"mech-marshal.h\""; \
 	             $(GLIB_GENMARSHAL) $< --prefix=_mech_marshal --body) > $@
+
+mech-resources.c: mechane.gresource.xml $(srcdir)/theme/style
+	$(AM_V_GEN) $(GLIB_COMPILE_RESOURCES) $(srcdir)/mechane.gresource.xml \
+	             --target=$@ --sourcedir=$(srcdir) --c-name _mech --generate-header
+mech-resources.h: mechane.gresource.xml $(srcdir)/theme/style
+	$(AM_V_GEN) $(GLIB_COMPILE_RESOURCES) $(srcdir)/mechane.gresource.xml \
+	             --target=$@ --sourcedir=$(srcdir) --c-name _mech --generate-source
+
 
 CLEANFILES = $(BUILT_SOURCES)
