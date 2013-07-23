@@ -1,0 +1,56 @@
+- foreground: #426a41;
+
+window-content {
+  - background: url ('resource://org/mechane/mechane-demo/background.png') repeat;
+  - background[1]: linear 0, 0, 0, 5 { 0%: #747a78; 100%: rgba (20, 30, 80, 0.3) };
+};
+
+list-pane {
+  - background: rgba (155, 155, 155, 0.6);
+  - corner-radius [right]: 6px;
+  - border: #565 1px;
+  - border.width[left]: 0px;
+};
+
+code-button {
+  - border: #565 1px;
+  - corner-radius: 3px;
+  - background: linear 0,0,0,20 { 0%: rgba(80, 140, 170, 1); 100%: rgba (0, 210, 15, 0.6) };
+  - background: linear 0,0,0,20 { 0%: rgba(80, 140, 170, 1); 100%: rgba (15, 0, 210, 0.6) };
+  - background[1]: url ('resource://org/mechane/mechane-demo/code.svg');
+  - margin: 2px;
+};
+
+code-button[active] {
+  - border: #565 1px;
+  - corner-radius: 3px;
+  - background: linear 0,0,0,20 { 0%: rgba(40, 160, 70, 1); 100%: rgba (15, 80, 50, 0.6) };
+  - background[1]: url ('resource://org/mechane/mechane-demo/code.svg');
+  - margin: 2px;
+};
+
+info-button {
+  - border: #565 1px;
+  - corner-radius: 3px;
+  - background: linear 0,0,0,20 { 0%: rgba(80, 140, 170, 1); 100%: rgba (15, 0, 210, 0.6) };
+  - background[1]: url ('resource://org/mechane/mechane-demo/info.svg');
+  - margin: 2px;
+};
+
+info-button[active] {
+  - border: #565 1px;
+  - corner-radius: 3px;
+  - background: linear 0,0,0,20 { 0%: rgba(40, 160, 70, 1); 100%: rgba (15, 80, 50, 0.6) };
+  - background[1]: url ('resource://org/mechane/mechane-demo/info.svg');
+  - margin: 2px;
+};
+
+demo-pane {
+  - background: rgba (155, 155, 155, 0.6);
+  - corner-radius: 6px;
+  - border: #565 1px;
+};
+
+code {
+  - font: monospace;
+};

@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
   <gresource prefix="/org/mechane/mechane-demo">
+    <!-- style -->
+    <file alias="style" compressed="true">mechane-demo.style</file>
+    <file alias="background.png">background.png</file>
+    <file alias="info.svg">info.svg</file>
+    <file alias="code.svg">code.svg</file>
     <!-- demos -->
     <file alias="demos/matrices.c">matrices.c</file>
   </gresource>

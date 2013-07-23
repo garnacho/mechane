@@ -321,6 +321,29 @@ create_buttons (void)
   return box;
 }
 
+static void
+load_demo_style (MechWindow *window)
+{
+  GError *error = NULL;
+  MechTheme *theme;
+  GFile *file;
+
+  theme = mech_theme_new ();
+  file = g_file_new_for_uri ("resource://org/mechane/mechane-demo/style");
+  mech_theme_load_style_from_file (theme,
+                                   mech_window_get_style (window),
+                                   file, &error);
+
+  if (error)
+    {
+      g_warning ("Could not load demo style: %s\n", error->message);
+      g_error_free (error);
+    }
+
+  g_object_unref (theme);
+  g_object_unref (file);
+}
+
 MechWindow *
 create_main_window (void)
 {
@@ -329,6 +352,7 @@ create_main_window (void)
   global_data = g_new0 (MechaneDemo, 1);
 
   global_data->window = mech_window_new ();
+  load_demo_style (global_data->window);
   mech_window_set_title (global_data->window, "Mechane demo");
 
   box = mech_fixed_box_new ();
