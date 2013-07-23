@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/org/mechane/mechane-demo">
+    <!-- demos -->
+    <file alias="demos/matrices.c">matrices.c</file>
+  </gresource>
+</gresources>

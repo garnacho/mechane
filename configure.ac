@@ -94,8 +94,9 @@ PKG_CHECK_MODULES(MECH_EGL_DEPS, [
 
 AC_CONFIG_FILES([
 	Makefile
-        mechane/backends/Makefile
-        mechane/backends/wayland/Makefile
+	demo/Makefile
+	mechane/backends/Makefile
+	mechane/backends/wayland/Makefile
 	mechane/Makefile
 	po/Makefile.in
 ])

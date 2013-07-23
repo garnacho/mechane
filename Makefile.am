@@ -1,1 +1,1 @@
-SUBDIRS = mechane po
+SUBDIRS = mechane demo po
