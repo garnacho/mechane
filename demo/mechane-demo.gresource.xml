@@ -6,7 +6,11 @@
     <file alias="background.png">background.png</file>
     <file alias="info.svg">info.svg</file>
     <file alias="code.svg">code.svg</file>
+    <file alias="cloud.svg">cloud.svg</file>
+    <file alias="cloud2.svg">cloud2.svg</file>
+    <file alias="map.jpg">map.jpg</file>
     <!-- demos -->
     <file alias="demos/matrices.c">matrices.c</file>
+    <file alias="demos/scroll-box.c">scroll-box.c</file>
   </gresource>
 </gresources>

@@ -54,3 +54,11 @@ demo-pane {
 code {
   - font: monospace;
 };
+
+cloud {
+  -background: url ('resource://org/mechane/mechane-demo/cloud.svg') repeat;
+};
+
+cloud2 {
+  -background: url ('resource://org/mechane/mechane-demo/cloud2.svg') repeat;
+};

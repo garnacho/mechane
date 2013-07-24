@@ -2,6 +2,7 @@
 #include "mechane-demo-resources.h"
 
 #include "matrices.c"
+#include "scroll-box.c"
 
 typedef struct _MechaneDemo MechaneDemo;
 typedef struct _DemoData DemoData;
@@ -22,6 +23,15 @@ DemoData demos[] = {
     "The mech_area_transform_*() collection of functions can be used to "
     "translate points to the coordinate space of another MechArea.",
     demo_matrices
+  },
+  {
+    "Scroll box",
+    "scroll-box.c",
+    "MechScrollBox is a MechArea that implements the fundamentals of "
+    "scrolling. Each scroll axis is controlled by a MechAdjustable, "
+    "so the viewport will update accordingly at each change. Internally, "
+    "MechScrollBox uses mech_area_set_matrix() and mech_area_set_clip()",
+    demo_scroll_box
   }
 };
 
