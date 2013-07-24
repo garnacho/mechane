@@ -12,5 +12,6 @@
     <!-- demos -->
     <file alias="demos/matrices.c">matrices.c</file>
     <file alias="demos/scroll-box.c">scroll-box.c</file>
+    <file alias="demos/scroll-area.c">scroll-area.c</file>
   </gresource>
 </gresources>

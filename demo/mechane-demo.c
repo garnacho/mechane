@@ -3,6 +3,7 @@
 
 #include "matrices.c"
 #include "scroll-box.c"
+#include "scroll-area.c"
 
 typedef struct _MechaneDemo MechaneDemo;
 typedef struct _DemoData DemoData;
@@ -32,6 +33,13 @@ DemoData demos[] = {
     "so the viewport will update accordingly at each change. Internally, "
     "MechScrollBox uses mech_area_set_matrix() and mech_area_set_clip()",
     demo_scroll_box
+  },
+  { "Scroll area",
+    "scroll-area.c",
+    "MechScrollArea is a MechScrollBox implementation that provides "
+    "scrollbars and allows the viewport to be manipulated by user "
+    "input like scroll events and gestures.",
+    demo_scroll_area
   }
 };
 
