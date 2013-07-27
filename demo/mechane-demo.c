@@ -4,6 +4,7 @@
 #include "matrices.c"
 #include "scroll-box.c"
 #include "scroll-area.c"
+#include "egl.c"
 
 typedef struct _MechaneDemo MechaneDemo;
 typedef struct _DemoData DemoData;
@@ -40,6 +41,14 @@ DemoData demos[] = {
     "scrollbars and allows the viewport to be manipulated by user "
     "input like scroll events and gestures.",
     demo_scroll_area
+  },
+  { "EGL",
+    "egl.c",
+    "When hardware acceleration is available, Mechane can make use of it "
+    "quite transparently. This demo defines an area that does GL rendering "
+    "on the draw() handler, 2 instances are then created within overlapped "
+    "buttons.",
+    demo_egl
   }
 };
 
