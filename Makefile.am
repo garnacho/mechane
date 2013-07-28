@@ -1,1 +1,1 @@
-SUBDIRS = mechane demo po
+SUBDIRS = mechane demo tests po

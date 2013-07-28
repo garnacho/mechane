@@ -98,6 +98,7 @@ AC_CONFIG_FILES([
 	mechane/backends/Makefile
 	mechane/backends/wayland/Makefile
 	mechane/Makefile
+	tests/Makefile
 	po/Makefile.in
 ])
 
