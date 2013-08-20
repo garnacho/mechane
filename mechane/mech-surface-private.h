@@ -82,8 +82,6 @@ cairo_region_t * _mech_surface_get_clip         (MechSurface       *surface);
 gboolean         _mech_surface_area_is_rendered (MechSurface       *surface,
                                                  MechArea          *area,
                                                  cairo_rectangle_t *rect);
-gboolean
-            _mech_surface_get_need_full_refresh (MechSurface       *surface);
 
 G_END_DECLS
 

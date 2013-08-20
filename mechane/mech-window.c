@@ -205,22 +205,10 @@ static void
 mech_window_draw (MechWindow *window,
                   cairo_t    *cr)
 {
-  gboolean need_full_refresh;
   MechWindowPrivate *priv;
 
   priv = mech_window_get_instance_private (window);
-  need_full_refresh = _mech_surface_get_need_full_refresh (priv->surface);
-
-  if (!need_full_refresh)
-    cairo_push_group (cr);
-
   _mech_stage_render (priv->stage, cr);
-
-  if (!need_full_refresh)
-    {
-      cairo_pop_group_to_source (cr);
-      cairo_paint (cr);
-    }
 }
 
 static gint

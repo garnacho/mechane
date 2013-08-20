@@ -101,7 +101,6 @@ MechSurface *
 _mech_surface_wayland_new (MechBackingSurfaceType  type,
                            struct wl_surface      *wl_surface)
 {
-  gboolean need_full_refresh = FALSE;
   GType gtype = G_TYPE_NONE;
   MechSurface *surface;
   GError *error = NULL;
@@ -112,17 +111,12 @@ _mech_surface_wayland_new (MechBackingSurfaceType  type,
   if (type == MECH_BACKING_SURFACE_TYPE_SHM)
     gtype = MECH_TYPE_SURFACE_WAYLAND_SHM;
   else if (type == MECH_BACKING_SURFACE_TYPE_EGL)
-    {
-      gtype = MECH_TYPE_SURFACE_WAYLAND_EGL;
-      need_full_refresh = TRUE;
-    }
-
-  if (gtype == G_TYPE_NONE)
+    gtype = MECH_TYPE_SURFACE_WAYLAND_EGL;
+  else
     return NULL;
 
   surface = g_object_new (gtype,
                           "wl-surface", wl_surface,
-                          "need-full-refresh", need_full_refresh,
                           NULL);
 
   if (!G_IS_INITABLE (surface))

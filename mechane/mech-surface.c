@@ -44,8 +44,7 @@
 typedef struct _MechSurfacePrivate MechSurfacePrivate;
 
 enum {
-  PROP_AREA = 1,
-  PROP_NEED_FULL_REFRESH
+  PROP_AREA = 1
 };
 
 struct _MechSurfacePrivate
@@ -66,9 +65,6 @@ struct _MechSurfacePrivate
 
   gdouble scale_x;
   gdouble scale_y;
-
-  guint need_full_refresh : 1;
-  guint initialized       : 1;
 };
 
 G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MechSurface, mech_surface, G_TYPE_OBJECT)
@@ -94,9 +90,6 @@ mech_surface_get_property (GObject    *object,
     case PROP_AREA:
       g_value_set_object (value, priv->area);
       break;
-    case PROP_NEED_FULL_REFRESH:
-      g_value_set_boolean (value, priv->need_full_refresh);
-      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
@@ -116,9 +109,6 @@ mech_surface_set_property (GObject      *object,
     {
     case PROP_AREA:
       priv->area = g_value_get_object (value);
-      break;
-    case PROP_NEED_FULL_REFRESH:
-      priv->need_full_refresh = g_value_get_boolean (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -157,15 +147,6 @@ mech_surface_class_init (MechSurfaceClass *klass)
                                                         MECH_TYPE_AREA,
                                                         G_PARAM_READWRITE |
                                                         G_PARAM_STATIC_STRINGS));
-  g_object_class_install_property (object_class,
-                                   PROP_NEED_FULL_REFRESH,
-                                   g_param_spec_boolean ("need-full-refresh",
-                                                         "need-full-refresh",
-                                                         "need-full-refresh",
-                                                         FALSE,
-                                                         G_PARAM_READWRITE |
-                                                         G_PARAM_STATIC_STRINGS |
-                                                         G_PARAM_CONSTRUCT_ONLY));
 }
 
 static void
@@ -448,7 +429,6 @@ _mech_surface_update_cached_rect (MechSurface       *surface,
     *dy = priv->cached_rect.y - new_surface_rect.y;
 
   priv->cached_rect = new_surface_rect;
-  priv->initialized = TRUE;
 }
 
 static gint
@@ -500,8 +480,7 @@ _mech_surface_update_viewport (MechSurface *surface)
      y2 > priv->cached_rect.y + priv->cached_rect.height);
   priv->viewport_rect = rect;
 
-  if (!priv->initialized ||
-      priv->need_full_refresh ||
+  if (_mech_surface_get_age (surface) == 0 ||
       _mech_surface_update_scale (surface))
     {
       _mech_surface_update_cached_rect (surface, &rect, FALSE, NULL, NULL);
@@ -887,13 +866,4 @@ _mech_surface_area_is_rendered (MechSurface       *surface,
     }
 
   return x2 > x1 && y2 > y1;
-}
-
-gboolean
-_mech_surface_get_need_full_refresh (MechSurface *surface)
-{
-  MechSurfacePrivate *priv;
-
-  priv = mech_surface_get_instance_private (surface);
-  return priv->need_full_refresh;
 }
