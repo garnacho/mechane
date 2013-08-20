@@ -148,16 +148,12 @@ _area_peek_offscreen (MechArea *area)
 
 static OffscreenNode *
 _mech_stage_find_container_offscreen (MechStage *stage,
-                                      MechArea  *area,
-                                      gboolean   start_from_parent)
+                                      MechArea  *area)
 {
   MechStagePrivate *priv = mech_stage_get_instance_private (stage);
   GNode *area_node;
 
   area_node = _mech_area_get_node (area);
-
-  if (start_from_parent)
-    area_node = area_node->parent;
 
   while (area_node)
     {
@@ -181,7 +177,7 @@ _mech_stage_create_offscreen_node (MechStage *stage,
   OffscreenNode *parent, *node;
   GNode *child;
 
-  parent = _mech_stage_find_container_offscreen (stage, area, TRUE);
+  parent = _mech_stage_find_container_offscreen (stage, area);
 
   node = g_new0 (OffscreenNode, 1);
   node->node.data = _mech_surface_new (area);
@@ -1016,6 +1012,8 @@ _mech_stage_invalidate (MechStage      *stage,
 
   offscreen = _mech_stage_find_container_offscreen (stage, area,
                                                     start_from_parent);
+  current = area;
+
   while (offscreen)
     {
       MechPoint copy[4];
@@ -1028,7 +1026,8 @@ _mech_stage_invalidate (MechStage      *stage,
       rect.y = MIN4 (copy[0].y, copy[1].y, copy[2].y, copy[3].y);
       rect.width = MAX4 (copy[0].x, copy[1].x, copy[2].x, copy[3].x) - rect.x;
       rect.height = MAX4 (copy[0].y, copy[1].y, copy[2].y, copy[3].y) - rect.y;
-      _mech_surface_damage (offscreen->node.data, &rect);
+      if (!start_from_parent || offscreen->area != area)
+        _mech_surface_damage (offscreen->node.data, &rect);
 
       offscreen = (OffscreenNode *) offscreen->node.parent;
     }
@@ -1061,7 +1060,7 @@ _mech_stage_get_renderable_rect (MechStage         *stage,
 {
   OffscreenNode *offscreen;
 
-  offscreen = _mech_stage_find_container_offscreen (stage, area, FALSE);
+  offscreen = _mech_stage_find_container_offscreen (stage, area);
 
   if (!offscreen)
     return FALSE;
