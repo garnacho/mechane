@@ -34,6 +34,8 @@ struct _MechSurfaceWaylandSHMPriv
   gsize data_len;
   gint tx;
   gint ty;
+
+  guint initialized : 1;
 };
 
 static gint
@@ -118,6 +120,7 @@ _surface_ensure_surface (MechSurfaceWaylandSHM *surface,
   priv->surface = cairo_image_surface_create_for_data (priv->data,
                                                        CAIRO_FORMAT_ARGB32,
                                                        width, height, stride);
+  priv->initialized = FALSE;
 }
 
 static void
@@ -146,6 +149,25 @@ mech_surface_wayland_shm_get_surface (MechSurface *surface)
 
   surface_shm = (MechSurfaceWaylandSHM *) surface;
   return surface_shm->_priv->surface;
+}
+
+static void
+mech_surface_wayland_shm_release (MechSurface *surface)
+{
+  MechSurfaceWaylandSHM *surface_shm;
+
+  /* Mark as initialized after first release */
+  surface_shm = (MechSurfaceWaylandSHM *) surface;
+  surface_shm->_priv->initialized = TRUE;
+}
+
+static gint
+mech_surface_wayland_shm_get_age (MechSurface *surface)
+{
+  MechSurfaceWaylandSHM *surface_shm;
+
+  surface_shm = (MechSurfaceWaylandSHM *) surface;
+  return surface_shm->_priv->initialized ? 1 : 0;
 }
 
 static void
@@ -208,6 +230,8 @@ mech_surface_wayland_shm_class_init (MechSurfaceWaylandSHMClass *klass)
   surface_class = MECH_SURFACE_CLASS (klass);
   surface_class->set_size = mech_surface_wayland_shm_set_size;
   surface_class->get_surface = mech_surface_wayland_shm_get_surface;
+  surface_class->release = mech_surface_wayland_shm_release;
+  surface_class->get_age = mech_surface_wayland_shm_get_age;
 
   surface_wayland_class = MECH_SURFACE_WAYLAND_CLASS (klass);
   surface_wayland_class->translate = mech_surface_wayland_shm_translate;
