@@ -200,6 +200,7 @@ _mech_stage_create_offscreen_node (MechStage *stage,
     }
 
   g_node_append ((GNode *) parent, (GNode *) node);
+  g_object_set_qdata ((GObject *) area, quark_area_offscreen, node);
 
   return node;
 }
@@ -224,6 +225,7 @@ _mech_stage_destroy_offscreen_node (OffscreenNode *offscreen,
         _mech_stage_destroy_offscreen_node ((OffscreenNode *) child, recurse);
     }
 
+  g_object_set_qdata ((GObject *) offscreen->area, quark_area_offscreen, NULL);
   g_object_unref (offscreen->node.data);
   g_node_unlink ((GNode *) offscreen);
 }
@@ -239,15 +241,11 @@ _mech_stage_check_needs_offscreen (MechStage *stage,
   if (mech_area_get_matrix (area, NULL))
     {
       if (!offscreen)
-        {
-          offscreen = _mech_stage_create_offscreen_node (stage, area);
-          g_object_set_qdata ((GObject *) area, quark_area_offscreen, offscreen);
-        }
+        offscreen = _mech_stage_create_offscreen_node (stage, area);
     }
   else if (offscreen)
     {
       _mech_stage_destroy_offscreen_node (offscreen, FALSE);
-      g_object_set_qdata ((GObject *) area, quark_area_offscreen, NULL);
       offscreen = NULL;
     }
 
@@ -589,6 +587,9 @@ static gboolean
 _stage_dispose_offscreens (GNode    *node,
                            gpointer  user_data)
 {
+  OffscreenNode *offscreen = (OffscreenNode *) node;
+
+  g_object_set_qdata ((GObject *) offscreen->area, quark_area_offscreen, NULL);
   g_object_unref (node->data);
   return FALSE;
 }
