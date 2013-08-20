@@ -995,7 +995,7 @@ _mech_stage_invalidate (MechStage      *stage,
     area = priv->areas->node.data;
 
   if (!region)
-    _mech_area_get_renderable_rect (area, &rect);
+    _mech_stage_get_renderable_rect (stage, area, &rect);
   else if (!cairo_region_is_empty (region))
     {
       cairo_rectangle_int_t int_rect;
