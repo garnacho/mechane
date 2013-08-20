@@ -29,6 +29,12 @@
 
 #define MIN4(a,b,c,d) MIN (MIN ((a), (b)), MIN ((c), (d)))
 #define MAX4(a,b,c,d) MAX (MAX ((a), (b)), MAX ((c), (d)))
+#define RECT_TO_POINTS(r,p) G_STMT_START {              \
+    (p)[0].x = (p)[2].x = (r).x;                        \
+    (p)[0].y = (p)[1].y = (r).y;                        \
+    (p)[1].x = (p)[3].x = (r).x + (r).width;            \
+    (p)[2].y = (p)[3].y = (r).y + (r).height;           \
+  } G_STMT_END
 
 typedef struct _MechStagePrivate MechStagePrivate;
 typedef struct _ZCacheNode ZCacheNode;
@@ -973,6 +979,61 @@ _mech_stage_set_root_surface (MechStage   *stage,
   _mech_stage_invalidate (stage, NULL, NULL, FALSE);
 }
 
+static gboolean
+_stage_area_clipped_on_offscreen (MechArea       *area,
+                                  OffscreenNode  *offscreen,
+                                  MechArea      **clip_area)
+{
+  GNode *area_node;
+
+  if (area == offscreen->area)
+    return FALSE;
+
+  area_node = _mech_area_get_node (area)->parent;
+
+  while (area_node && area_node->data != offscreen->area)
+    {
+      if (mech_area_get_clip (area_node->data))
+        {
+          *clip_area = area_node->data;
+          return TRUE;
+        }
+
+      area_node = area_node->parent;
+    }
+
+  return FALSE;
+}
+
+static void
+_stage_clamp_to_area (OffscreenNode     *offscreen,
+                      MechArea          *clip_area,
+                      cairo_rectangle_t *rect)
+{
+  cairo_rectangle_t parent_rect, clip_rect, clamped;
+
+  _mech_area_get_stage_rect (offscreen->area, &parent_rect);
+  _mech_area_get_stage_rect (clip_area, &clip_rect);
+
+  /* Set clip_rect on the same coords than rect */
+  clip_rect.x -= parent_rect.x;
+  clip_rect.y -= parent_rect.y;
+
+  clamped.x = MAX (rect->x, clip_rect.x);
+  clamped.y = MAX (rect->y, clip_rect.y);
+  clamped.width = MIN (rect->x + rect->width,
+                       clip_rect.x + clip_rect.width) - clamped.x;
+  clamped.height = MIN (rect->y + rect->height,
+                        clip_rect.y + clip_rect.height) - clamped.y;
+
+  if (clamped.width < 0)
+    clamped.width = 0;
+  if (clamped.height < 0)
+    clamped.height = 0;
+
+  *rect = clamped;
+}
+
 void
 _mech_stage_invalidate (MechStage      *stage,
                         MechArea       *area,
@@ -980,7 +1041,8 @@ _mech_stage_invalidate (MechStage      *stage,
                         gboolean        start_from_parent)
 {
   MechStagePrivate *priv = mech_stage_get_instance_private (stage);
-  OffscreenNode *offscreen = NULL;
+  OffscreenNode *offscreen = NULL, *prev = NULL;
+  MechArea *current, *clip_area;
   cairo_rectangle_t rect;
   MechPoint points[4];
 
@@ -1005,30 +1067,30 @@ _mech_stage_invalidate (MechStage      *stage,
   else
     return;
 
-  points[0].x = points[2].x = rect.x;
-  points[0].y = points[1].y = rect.y;
-  points[1].x = points[3].x = rect.x + rect.width;
-  points[2].y = points[3].y = rect.y + rect.height;
+  RECT_TO_POINTS (rect, points);
 
-  offscreen = _mech_stage_find_container_offscreen (stage, area,
-                                                    start_from_parent);
+  offscreen = _mech_stage_find_container_offscreen (stage, area);
   current = area;
 
   while (offscreen)
     {
-      MechPoint copy[4];
+      mech_area_transform_points (current, offscreen->area,
+                                  (MechPoint *) &points, 4);
 
-      memcpy (copy, points, sizeof (MechPoint) * 4);
-      mech_area_transform_points (area, offscreen->area,
-                                  (MechPoint *) &copy, 4);
+      rect.x = MIN4 (points[0].x, points[1].x, points[2].x, points[3].x);
+      rect.y = MIN4 (points[0].y, points[1].y, points[2].y, points[3].y);
+      rect.width = MAX4 (points[0].x, points[1].x, points[2].x, points[3].x) - rect.x;
+      rect.height = MAX4 (points[0].y, points[1].y, points[2].y, points[3].y) - rect.y;
 
-      rect.x = MIN4 (copy[0].x, copy[1].x, copy[2].x, copy[3].x);
-      rect.y = MIN4 (copy[0].y, copy[1].y, copy[2].y, copy[3].y);
-      rect.width = MAX4 (copy[0].x, copy[1].x, copy[2].x, copy[3].x) - rect.x;
-      rect.height = MAX4 (copy[0].y, copy[1].y, copy[2].y, copy[3].y) - rect.y;
+      if (_stage_area_clipped_on_offscreen (current, offscreen, &clip_area))
+        _stage_clamp_to_area (offscreen, clip_area, &rect);
+
       if (!start_from_parent || offscreen->area != area)
         _mech_surface_damage (offscreen->node.data, &rect);
 
+      RECT_TO_POINTS (rect, points);
+      prev = offscreen;
+      current = offscreen->area;
       offscreen = (OffscreenNode *) offscreen->node.parent;
     }
 }
