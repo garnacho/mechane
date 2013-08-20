@@ -50,6 +50,8 @@ struct _MechSurfaceClass
 
   gboolean          (* acquire)     (MechSurface *surface);
   void              (* release)     (MechSurface *surface);
+
+  gint              (* get_age)     (MechSurface *surface);
 };
 
 GType            mech_surface_get_type          (void) G_GNUC_CONST;

@@ -62,6 +62,12 @@ struct _MechSurfacePrivate
 
 G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MechSurface, mech_surface, G_TYPE_OBJECT)
 
+static gint
+mech_surface_get_age_impl (MechSurface *surface)
+{
+  return 0;
+}
+
 static void
 mech_surface_get_property (GObject    *object,
                            guint       prop_id,
@@ -125,6 +131,8 @@ static void
 mech_surface_class_init (MechSurfaceClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
+
+  klass->get_age = mech_surface_get_age_impl;
 
   object_class->get_property = mech_surface_get_property;
   object_class->set_property = mech_surface_set_property;
