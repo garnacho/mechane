@@ -17,6 +17,7 @@
 
 #define EGL_EGLEXT_PROTOTYPES
 
+#include <string.h>
 #include <wayland-client.h>
 #include <wayland-egl.h>
 #include <GLES2/gl2.h>
@@ -45,6 +46,8 @@ struct _MechGLConfig
   EGLContext egl_argb_context;
   cairo_device_t *argb_device;
   GError *error;
+
+  guint has_buffer_age_ext               : 1;
 };
 
 struct _MechSurfaceWaylandEGLPriv
@@ -53,6 +56,7 @@ struct _MechSurfaceWaylandEGLPriv
   struct wl_egl_window *wl_egl_window;
   EGLSurface egl_surface;
   cairo_surface_t *surface;
+  int cached_age;
   int tx;
   int ty;
 };
@@ -62,6 +66,7 @@ _create_gl_config (void)
 {
   EGLint major, minor, n_configs;
   MechBackendWayland *backend;
+  const gchar *extensions;
   MechGLConfig *config;
   GError *error;
   static const EGLint argb_config_attributes[] = {
@@ -130,6 +135,11 @@ _create_gl_config (void)
       goto init_failed;
     }
 
+  extensions = eglQueryString (config->egl_display, EGL_EXTENSIONS);
+
+  if (strstr (extensions, "EGL_EXT_buffer_age"))
+    config->has_buffer_age_ext = TRUE;
+
   return config;
 
  init_failed:
@@ -162,8 +172,8 @@ _get_gl_config (void)
 
 static gboolean
 mech_surface_wayland_egl_initable_init (GInitable     *initable,
-                                         GCancellable  *cancellable,
-                                         GError       **error)
+                                        GCancellable  *cancellable,
+                                        GError       **error)
 {
   MechSurfaceWaylandEGL *surface_egl = (MechSurfaceWaylandEGL *) initable;
   MechGLConfig *config;
@@ -251,6 +261,7 @@ mech_surface_wayland_egl_release (MechSurface *surface)
     }
 
   cairo_device_release (priv->gl_config->argb_device);
+  priv->cached_age = -1;
 }
 
 static cairo_surface_t *
@@ -294,6 +305,29 @@ mech_surface_wayland_egl_set_size (MechSurface *surface,
     }
 }
 
+static gint
+mech_surface_wayland_egl_get_age (MechSurface *surface)
+{
+  MechSurfaceWaylandEGL *egl_surface = (MechSurfaceWaylandEGL *) surface;
+  MechSurfaceWaylandEGLPriv *priv = egl_surface->_priv;
+
+  if (priv->cached_age < 0)
+    {
+      EGLint buffer_age = 0;
+
+      if (priv->gl_config &&
+          priv->egl_surface &&
+          priv->gl_config->has_buffer_age_ext)
+        eglQuerySurface(priv->gl_config->egl_display,
+                        priv->egl_surface,
+                        EGL_BUFFER_AGE_EXT, &buffer_age);
+
+      priv->cached_age = (gint) buffer_age;
+    }
+
+  return priv->cached_age;
+}
+
 static void
 mech_surface_wayland_egl_translate (MechSurfaceWayland *surface,
                                     gint                tx,
@@ -331,6 +365,7 @@ mech_surface_wayland_egl_class_init (MechSurfaceWaylandEGLClass *klass)
   surface_class->release = mech_surface_wayland_egl_release;
   surface_class->get_surface = mech_surface_wayland_egl_get_surface;
   surface_class->set_size = mech_surface_wayland_egl_set_size;
+  surface_class->get_age = mech_surface_wayland_egl_get_age;
 
   surface_wayland_class = (MechSurfaceWaylandClass *) klass;
   surface_wayland_class->translate = mech_surface_wayland_egl_translate;
