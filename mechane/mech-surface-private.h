@@ -75,8 +75,10 @@ void             _mech_surface_release          (MechSurface       *surface);
 
 void             _mech_surface_damage           (MechSurface       *surface,
                                                  cairo_rectangle_t *rect);
-cairo_region_t * _mech_surface_apply_clip       (MechSurface       *surface,
+gboolean         _mech_surface_apply_clip       (MechSurface       *surface,
                                                  cairo_t           *cr);
+cairo_region_t * _mech_surface_get_clip         (MechSurface       *surface);
+
 gboolean         _mech_surface_area_is_rendered (MechSurface       *surface,
                                                  MechArea          *area,
                                                  cairo_rectangle_t *rect);

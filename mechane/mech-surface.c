@@ -29,7 +29,17 @@
   }                                                                     \
   G_STMT_END
 
+#define COPY_RECT(s,d) G_STMT_START                                     \
+  {                                                                     \
+    (d)->x = ((s)->x);                                                  \
+    (d)->y = ((s)->y);                                                  \
+    (d)->width = (s)->width;                                            \
+    (d)->height = (s)->height;                                          \
+  }                                                                     \
+  G_STMT_END
+
 #define EXTRA_PIXELS 400
+#define AGE_BUFFER_LIMIT 3
 
 typedef struct _MechSurfacePrivate MechSurfacePrivate;
 
@@ -48,6 +58,7 @@ struct _MechSurfacePrivate
   GArray *damaged;
 
   /* Pixel sizes */
+  GArray *damage_cache;
   gint width;
   gint height;
   gint cache_width;
@@ -165,6 +176,7 @@ mech_surface_init (MechSurface *surface)
   priv = mech_surface_get_instance_private (surface);
   priv->scale_x = 1;
   priv->scale_y = 1;
+  priv->damage_cache = g_array_new (FALSE, FALSE, sizeof (cairo_region_t *));
 }
 
 static gdouble
@@ -439,6 +451,21 @@ _mech_surface_update_cached_rect (MechSurface       *surface,
   priv->initialized = TRUE;
 }
 
+static gint
+_mech_surface_get_age (MechSurface *surface)
+{
+  MechSurfacePrivate *priv;
+  gint age;
+
+  priv = mech_surface_get_instance_private (surface);
+  age = MECH_SURFACE_GET_CLASS (surface)->get_age (surface);
+
+  if (age < 0 || age > AGE_BUFFER_LIMIT)
+    age = 0;
+
+  return age;
+}
+
 void
 _mech_surface_update_viewport (MechSurface *surface)
 {
@@ -519,6 +546,66 @@ _mech_surface_get_size (MechSurface *surface,
     *height = priv->height;
 }
 
+static void
+_mech_surface_get_matrix (MechSurface    *surface,
+                          cairo_matrix_t *matrix)
+{
+  MechSurfacePrivate *priv;
+
+  priv = mech_surface_get_instance_private (surface);
+  cairo_matrix_init_identity (matrix);
+  cairo_matrix_translate (matrix, priv->cached_rect.x,
+                          priv->cached_rect.y);
+  cairo_matrix_scale (matrix, 1 / priv->scale_x, 1 / priv->scale_y);
+}
+
+static void
+_mech_surface_store_damage (MechSurface *surface)
+{
+  MechSurfacePrivate *priv;
+  cairo_region_t *region;
+
+  priv = mech_surface_get_instance_private (surface);
+  region = cairo_region_create ();
+
+  if (priv->damaged && priv->damaged->len > 0)
+    {
+      cairo_matrix_t matrix;
+      gint i;
+
+      _mech_surface_get_matrix (surface, &matrix);
+      cairo_matrix_invert (&matrix);
+
+      for (i = 0; i < priv->damaged->len; i++)
+        {
+          cairo_rectangle_int_t pixels;
+          cairo_rectangle_t *rect;
+
+          rect = &g_array_index (priv->damaged, cairo_rectangle_t, i);
+          cairo_matrix_transform_point (&matrix, &rect->x, &rect->y);
+          cairo_matrix_transform_distance (&matrix, &rect->width, &rect->height);
+
+          ALIGN_RECT (rect, &pixels);
+
+          cairo_region_union_rectangle (region, &pixels);
+        }
+
+      g_array_unref (priv->damaged);
+      priv->damaged = NULL;
+    }
+
+  g_array_prepend_val (priv->damage_cache, region);
+
+  if (priv->damage_cache->len > AGE_BUFFER_LIMIT)
+    {
+      region = g_array_index (priv->damage_cache, cairo_region_t *,
+                              priv->damage_cache->len - 1);
+      cairo_region_destroy (region);
+
+      g_array_remove_index (priv->damage_cache, priv->damage_cache->len - 1);
+    }
+}
+
 cairo_t *
 _mech_surface_cairo_create (MechSurface *surface)
 {
@@ -535,6 +622,8 @@ _mech_surface_cairo_create (MechSurface *surface)
   cr = cairo_create (cairo_surface);
   cairo_scale (cr, priv->scale_x, priv->scale_y);
   cairo_translate (cr, -priv->cached_rect.x, -priv->cached_rect.y);
+
+  _mech_surface_store_damage (surface);
 
   return cr;
 }
@@ -619,38 +708,73 @@ _mech_surface_damage (MechSurface       *surface,
   g_array_append_val (priv->damaged, damage);
 }
 
-cairo_region_t *
+static cairo_region_t *
+_mech_surface_get_damage_region (MechSurface *surface)
+{
+  MechSurfacePrivate *priv;
+  cairo_region_t *region;
+  gint age;
+
+  priv = mech_surface_get_instance_private (surface);
+  age = _mech_surface_get_age (surface);
+  region = cairo_region_create ();
+
+  if (age == 0 || age > priv->damage_cache->len)
+    {
+      cairo_rectangle_int_t rect;
+
+      /* Too new, or too old, everything must be redrawn */
+      rect.x = rect.y = 0;
+      rect.width = priv->cache_width;
+      rect.height = priv->cache_height;
+      cairo_region_union_rectangle (region, &rect);
+    }
+  else
+    {
+      cairo_region_t *cache_region;
+      gint i;
+
+      for (i = 0; i < age; i++)
+        {
+          cache_region = g_array_index (priv->damage_cache,
+                                        cairo_region_t *, i);
+          cairo_region_union (region, cache_region);
+        }
+    }
+
+  return region;
+}
+
+gboolean
 _mech_surface_apply_clip (MechSurface *surface,
                           cairo_t     *cr)
 {
-  cairo_rectangle_int_t check;
+  cairo_region_t *damage_region;
   MechSurfacePrivate *priv;
-  cairo_region_t *region;
-  gint i;
+  gint i, n_rects;
 
   priv = mech_surface_get_instance_private (surface);
-  region = cairo_region_create ();
+  damage_region = _mech_surface_get_damage_region (surface);
 
-  if (!priv->damaged || priv->damaged->len == 0)
-    return region;
-
-  for (i = 0; i < priv->damaged->len; i++)
+  if (cairo_region_is_empty (damage_region))
     {
-      cairo_rectangle_t *rect, pixels;
+      cairo_region_destroy (damage_region);
+      return FALSE;
+    }
 
-      rect = &g_array_index (priv->damaged, cairo_rectangle_t, i);
-      cairo_user_to_device (cr, &rect->x, &rect->y);
-      cairo_user_to_device_distance (cr, &rect->width, &rect->height);
+  n_rects = cairo_region_num_rectangles (damage_region);
 
-      ALIGN_RECT (rect, &pixels);
+  for (i = 0; i < n_rects; i++)
+    {
+      cairo_rectangle_int_t region_rect;
+      cairo_rectangle_t rect;
 
-      cairo_device_to_user (cr, &pixels.x, &pixels.y);
-      cairo_device_to_user_distance (cr, &pixels.width, &pixels.height);
+      cairo_region_get_rectangle (damage_region, i, &region_rect);
+      COPY_RECT (&region_rect, &rect);
 
-      cairo_rectangle (cr, pixels.x, pixels.y, pixels.width, pixels.height);
-
-      ALIGN_RECT (&pixels, &check);
-      cairo_region_union_rectangle (region, &check);
+      cairo_device_to_user (cr, &rect.x, &rect.y);
+      cairo_device_to_user_distance (cr, &rect.width, &rect.height);
+      cairo_rectangle (cr, rect.x, rect.y, rect.width, rect.height);
     }
 
   cairo_clip (cr);
@@ -661,13 +785,44 @@ _mech_surface_apply_clip (MechSurface *surface,
   cairo_paint (cr);
   cairo_restore (cr);
 
-  ALIGN_RECT (&priv->cached_rect, &check);
-  cairo_region_intersect_rectangle (region, &check);
+  cairo_region_destroy (damage_region);
 
-  g_array_unref (priv->damaged);
-  priv->damaged = NULL;
+  return TRUE;
+}
 
-  return region;
+cairo_region_t *
+_mech_surface_get_clip (MechSurface *surface)
+{
+  cairo_region_t *damage_region, *clip;
+  MechSurfacePrivate *priv;
+  cairo_matrix_t matrix;
+  gint i, n_rects;
+
+  priv = mech_surface_get_instance_private (surface);
+  damage_region = _mech_surface_get_damage_region (surface);
+  n_rects = cairo_region_num_rectangles (damage_region);
+  clip = cairo_region_create ();
+
+  _mech_surface_get_matrix (surface, &matrix);
+
+  for (i = 0; i < n_rects; i++)
+    {
+      cairo_rectangle_int_t region_rect;
+      cairo_rectangle_t rect;
+
+      cairo_region_get_rectangle (damage_region, i, &region_rect);
+      COPY_RECT (&region_rect, &rect);
+
+      cairo_matrix_transform_point (&matrix, &rect.x, &rect.y);
+      cairo_matrix_transform_distance (&matrix, &rect.width, &rect.height);
+
+      ALIGN_RECT (&rect, &region_rect);
+      cairo_region_union_rectangle (clip, &region_rect);
+    }
+
+  cairo_region_destroy (damage_region);
+
+  return clip;
 }
 
 gboolean

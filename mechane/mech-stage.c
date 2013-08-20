@@ -283,8 +283,8 @@ render_stage_context_push_target (RenderStageContext *context,
   else
     target.cr = cairo_reference (context->cr);
 
-  target.invalidated =
-    _mech_surface_apply_clip (offscreen->node.data, target.cr);
+  _mech_surface_apply_clip (offscreen->node.data, target.cr);
+  target.invalidated = _mech_surface_get_clip (offscreen->node.data);
   g_array_append_val (context->target_stack, target);
 
   return &g_array_index (context->target_stack, RenderingTarget,
