@@ -47,6 +47,7 @@ struct _MechGLConfig
   cairo_device_t *argb_device;
   GError *error;
 
+  guint has_swap_buffers_with_damage_ext : 1;
   guint has_buffer_age_ext               : 1;
 };
 
@@ -139,6 +140,9 @@ _create_gl_config (void)
 
   if (strstr (extensions, "EGL_EXT_buffer_age"))
     config->has_buffer_age_ext = TRUE;
+
+  if (strstr (extensions, "EGL_EXT_swap_buffers_with_damage"))
+    config->has_swap_buffers_with_damage_ext = TRUE;
 
   return config;
 
@@ -347,7 +351,42 @@ mech_surface_wayland_egl_damage (MechSurfaceWayland   *surface,
   MechSurfaceWaylandEGL *surface_egl = (MechSurfaceWaylandEGL *) surface;
   MechSurfaceWaylandEGLPriv *priv = surface_egl->_priv;
 
-  cairo_gl_surface_swapbuffers (priv->surface);
+  if (priv->gl_config->has_swap_buffers_with_damage_ext &&
+      region && !cairo_region_is_empty (region))
+    {
+      cairo_rectangle_int_t region_rect;
+      gint n_rects, i;
+      EGLint *rects;
+
+      n_rects = cairo_region_num_rectangles (region);
+      rects = g_new0 (EGLint, n_rects * 4);
+
+      for (i = 0; i < n_rects; i++)
+        {
+          cairo_region_get_rectangle (region, i, &region_rect);
+          rects[i * 4] = region_rect.x;
+          rects[i * 4 + 1] = cairo_gl_surface_get_height (priv->surface) -
+            (region_rect.y + region_rect.height);
+          rects[i * 4 + 2] = region_rect.width;
+          rects[i * 4 + 3] = region_rect.height;
+        }
+
+      eglSwapBuffersWithDamageEXT (priv->gl_config->egl_display,
+                                   priv->egl_surface, rects, n_rects);
+
+      for (i = 0; i < n_rects; i++)
+        {
+          cairo_region_get_rectangle (region, i, &region_rect);
+          cairo_surface_mark_dirty_rectangle (priv->surface,
+                                              region_rect.x, region_rect.y,
+                                              region_rect.width,
+                                              region_rect.height);
+        }
+
+      g_free (rects);
+    }
+  else
+    cairo_gl_surface_swapbuffers (priv->surface);
 }
 
 static void
