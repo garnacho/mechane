@@ -198,6 +198,7 @@ mech_window_finalize (GObject *object)
   g_object_unref (priv->style);
   g_object_unref (priv->stage);
   g_signal_handlers_disconnect_by_data (priv->frame, object);
+  _mech_area_set_window (priv->frame, NULL);
   g_object_unref (priv->frame);
 
   G_OBJECT_CLASS (mech_window_parent_class)->finalize (object);
@@ -674,7 +675,8 @@ mech_window_create_root (MechContainer *container)
   priv = mech_window_get_instance_private (window);
   priv->frame = mech_window_frame_new ();
 
-  _mech_area_make_window_root (priv->frame, window);
+  _mech_area_set_window (priv->frame, window);
+  _mech_stage_set_root (priv->stage, priv->frame);
 
   g_signal_connect_swapped (priv->frame, "move",
                             G_CALLBACK (mech_window_move), window);

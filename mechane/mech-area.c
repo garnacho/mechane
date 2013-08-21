@@ -878,11 +878,10 @@ mech_area_get_preferred_size (MechArea *area,
 }
 
 void
-_mech_area_make_window_root (MechArea   *area,
-                             MechWindow *window)
+_mech_area_set_window (MechArea   *area,
+                       MechWindow *window)
 {
   g_object_set_qdata ((GObject *) area, quark_window, window);
-  _mech_stage_set_root (_mech_window_get_stage (window), area);
 }
 
 MechStage *

@@ -26,7 +26,7 @@ G_BEGIN_DECLS
 MechStage      * _mech_area_get_stage             (MechArea          *area);
 GNode          * _mech_area_get_node              (MechArea          *area);
 
-void             _mech_area_make_window_root      (MechArea          *area,
+void             _mech_area_set_window            (MechArea          *area,
                                                    MechWindow        *window);
 gboolean         _mech_area_handle_event          (MechArea          *area,
                                                    MechEvent         *event);
