@@ -1,4 +1,3 @@
-
 /* Gears GL code by :
  *
  * Copyright © 2008 Kristian Høgsberg
@@ -346,7 +345,8 @@ egl_area_draw (MechArea *area,
 
   surface = cairo_get_target (cr);
   mech_area_get_allocated_size (area, &allocation);
-  mech_area_get_allocated_size (mech_window_get_root_area (window), &window_allocation);
+  mech_area_get_allocated_size (mech_container_get_root (MECH_CONTAINER (window)),
+                                &window_allocation);
 
   mech_area_transform_point (area, NULL, &allocation.x, &allocation.y);
 

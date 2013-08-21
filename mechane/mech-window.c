@@ -105,7 +105,8 @@ enum {
 
 static guint signals[LAST_SIGNAL] = { 0 };
 
-G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MechWindow, mech_window, G_TYPE_OBJECT)
+G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MechWindow, mech_window,
+                                     MECH_TYPE_CONTAINER)
 
 static void
 mech_window_get_property (GObject    *object,
@@ -196,6 +197,7 @@ mech_window_finalize (GObject *object)
 
   g_object_unref (priv->style);
   g_object_unref (priv->stage);
+  g_signal_handlers_disconnect_by_data (priv->frame, object);
   g_object_unref (priv->frame);
 
   G_OBJECT_CLASS (mech_window_parent_class)->finalize (object);
@@ -638,13 +640,65 @@ _mech_window_handle_event_internal (MechWindow *window,
 }
 
 static void
+window_frame_close (MechWindowFrame *frame,
+                    MechWindow      *window)
+{
+  gboolean retval;
+
+  g_object_ref (window);
+  g_signal_emit (window, signals[CLOSE_REQUEST], 0, &retval);
+
+  if (!retval)
+    mech_window_set_visible (window, FALSE);
+
+  g_object_unref (window);
+}
+
+static void
+window_frame_maximize_toggle (MechWindowFrame *frame,
+                              GParamSpec      *pspec,
+                              MechWindow      *window)
+{
+  if (mech_window_frame_get_maximized (frame))
+    mech_window_push_state (window, MECH_WINDOW_STATE_MAXIMIZED, NULL);
+  else
+    mech_window_pop_state (window);
+}
+
+static MechArea *
+mech_window_create_root (MechContainer *container)
+{
+  MechWindow *window = (MechWindow *) container;
+  MechWindowPrivate *priv;
+
+  priv = mech_window_get_instance_private (window);
+  priv->frame = mech_window_frame_new ();
+
+  _mech_area_make_window_root (priv->frame, window);
+
+  g_signal_connect_swapped (priv->frame, "move",
+                            G_CALLBACK (mech_window_move), window);
+  g_signal_connect_swapped (priv->frame, "resize",
+                            G_CALLBACK (mech_window_resize), window);
+  g_signal_connect (priv->frame, "close",
+                    G_CALLBACK (window_frame_close), window);
+  g_signal_connect (priv->frame, "notify::maximized",
+                    G_CALLBACK (window_frame_maximize_toggle), window);
+
+  return g_object_ref (priv->frame);
+}
+
+static void
 mech_window_class_init (MechWindowClass *klass)
 {
+  MechContainerClass *container_class = (MechContainerClass *) klass;
   GObjectClass *object_class = (GObjectClass *) klass;
 
   object_class->get_property = mech_window_get_property;
   object_class->set_property = mech_window_set_property;
   object_class->finalize = mech_window_finalize;
+
+  container_class->create_root = mech_window_create_root;
 
   klass->draw = mech_window_draw;
   klass->handle_event = _mech_window_handle_event_internal;
@@ -727,32 +781,6 @@ mech_window_class_init (MechWindowClass *klass)
                                                         G_PARAM_STATIC_STRINGS));
 }
 
-static void
-window_frame_close (MechWindowFrame *frame,
-                    MechWindow      *window)
-{
-  gboolean retval;
-
-  g_object_ref (window);
-  g_signal_emit (window, signals[CLOSE_REQUEST], 0, &retval);
-
-  if (!retval)
-    mech_window_set_visible (window, FALSE);
-
-  g_object_unref (window);
-}
-
-static void
-window_frame_maximize_toggle (MechWindowFrame *frame,
-                              GParamSpec      *pspec,
-                              MechWindow      *window)
-{
-  if (mech_window_frame_get_maximized (frame))
-    mech_window_push_state (window, MECH_WINDOW_STATE_MAXIMIZED, NULL);
-  else
-    mech_window_pop_state (window);
-}
-
 static MechStyle *
 _load_default_style (void)
 {
@@ -789,7 +817,6 @@ mech_window_init (MechWindow *window)
   priv = mech_window_get_instance_private (window);
   priv->resizable = TRUE;
   priv->stage = _mech_stage_new ();
-  priv->frame = mech_window_frame_new ();
 
   style = _load_default_style ();
 
@@ -798,17 +825,6 @@ mech_window_init (MechWindow *window)
       mech_window_set_style (window, style);
       g_object_unref (style);
     }
-
-  _mech_area_make_window_root (priv->frame, window);
-
-  g_signal_connect_swapped (priv->frame, "move",
-                            G_CALLBACK (mech_window_move), window);
-  g_signal_connect_swapped (priv->frame, "resize",
-                            G_CALLBACK (mech_window_resize), window);
-  g_signal_connect (priv->frame, "close",
-                    G_CALLBACK (window_frame_close), window);
-  g_signal_connect (priv->frame, "notify::maximized",
-                    G_CALLBACK (window_frame_maximize_toggle), window);
 }
 
 MechWindow *
@@ -1029,17 +1045,6 @@ mech_window_get_title (MechWindow *window)
 
   priv = mech_window_get_instance_private (window);
   return priv->title;
-}
-
-MechArea *
-mech_window_get_root_area (MechWindow *window)
-{
-  MechWindowPrivate *priv;
-
-  g_return_val_if_fail (MECH_IS_WINDOW (window), NULL);
-
-  priv = mech_window_get_instance_private (window);
-  return priv->frame;
 }
 
 void

@@ -20,6 +20,7 @@
 
 typedef struct _MechWindow MechWindow;
 
+#include <mechane/mech-container.h>
 #include <mechane/mech-monitor.h>
 #include <mechane/mech-style.h>
 #include <mechane/mech-area.h>
@@ -38,12 +39,12 @@ typedef struct _MechWindowClass MechWindowClass;
 
 struct _MechWindow
 {
-  GObject parent_instance;
+  MechContainer parent_instance;
 };
 
 struct _MechWindowClass
 {
-  GObjectClass parent_class;
+  MechContainerClass parent_class;
 
   void     (* draw)          (MechWindow        *window,
                               cairo_t           *cr);
@@ -104,7 +105,6 @@ void              mech_window_set_title     (MechWindow      *window,
                                              const gchar     *title);
 const gchar     * mech_window_get_title     (MechWindow      *window);
 
-MechArea        * mech_window_get_root_area (MechWindow      *window);
 MechMonitor     * mech_window_get_monitor   (MechWindow      *window);
 
 void              mech_window_queue_draw    (MechWindow      *window);

@@ -383,7 +383,8 @@ create_main_window (void)
   mech_window_set_title (global_data->window, "Mechane demo");
 
   box = mech_fixed_box_new ();
-  mech_area_add (mech_window_get_root_area (global_data->window), box);
+  mech_area_add (mech_container_get_root (MECH_CONTAINER (global_data->window)),
+                 box);
   mech_area_set_preferred_size (box, MECH_AXIS_X, MECH_UNIT_PX, 800);
   mech_area_set_preferred_size (box, MECH_AXIS_Y, MECH_UNIT_PX, 500);
 

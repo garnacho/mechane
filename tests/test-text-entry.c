@@ -90,7 +90,7 @@ main (int argc, char *argv[])
   scroll = mech_scroll_area_new (MECH_AXIS_FLAG_Y);
   mech_area_set_preferred_size (scroll, MECH_AXIS_X, MECH_UNIT_PX, 500);
   mech_area_set_preferred_size (scroll, MECH_AXIS_Y, MECH_UNIT_PX, 500);
-  mech_area_add (mech_window_get_root_area (window), scroll);
+  mech_area_add (mech_container_get_root (MECH_CONTAINER (window)), scroll);
 
   text = mech_text_input_new ();
   mech_area_add (scroll, text);
