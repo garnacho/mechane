@@ -221,6 +221,8 @@ mech_window_wayland_constructed (GObject *object)
 
   clock = _mech_clock_wayland_new (window, priv->wl_surface);
   _mech_window_set_clock ((MechWindow *) object, clock);
+
+  G_OBJECT_CLASS (mech_window_wayland_parent_class)->constructed (object);
 }
 
 static void
