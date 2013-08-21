@@ -64,7 +64,7 @@ mech_clock_dispatch_impl (MechClock *clock)
       priv->dispatched = next;
     }
 
-  _mech_window_process_updates (priv->window);
+  mech_container_process_updates ((MechContainer *) priv->window);
 
   return priv->animations != NULL;
 }

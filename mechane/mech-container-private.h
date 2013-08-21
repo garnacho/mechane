@@ -1,5 +1,5 @@
 /* Mechane:
- * Copyright (C) 2012 Carlos Garnacho <carlosg@gnome.org>
+ * Copyright (C) 2013 Carlos Garnacho <carlosg@gnome.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -15,21 +15,19 @@
  * License along with this library. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __MECH_WINDOW_PRIVATE_H__
-#define __MECH_WINDOW_PRIVATE_H__
+#ifndef __MECH_CONTAINER_PRIVATE_H__
+#define __MECH_CONTAINER_PRIVATE_H__
 
-#include <mechane/mech-clock-private.h>
 #include <mechane/mech-stage-private.h>
-#include <mechane/mech-window.h>
+#include <mechane/mech-container.h>
 
 G_BEGIN_DECLS
 
-void         _mech_window_set_clock          (MechWindow  *window,
-					      MechClock   *clock);
-MechClock  * _mech_window_get_clock          (MechWindow  *window);
-void         _mech_window_set_monitor        (MechWindow  *window,
-                                              MechMonitor *monitor);
+void         _mech_container_set_surface        (MechContainer *container,
+                                                 MechSurface   *surface);
+MechStage  * _mech_container_get_stage          (MechContainer *container);
+MechCursor * _mech_container_get_current_cursor (MechContainer *container);
 
 G_END_DECLS
 
-#endif /* __MECH_WINDOW_PRIVATE_H__ */
+#endif /* __MECH_CONTAINER_PRIVATE_H__ */

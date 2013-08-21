@@ -33,6 +33,7 @@ G_BEGIN_DECLS
 #include <mechane/mech-theme.h>
 #include <mechane/mech-renderer.h>
 #include <mechane/mech-area.h>
+#include <mechane/mech-container.h>
 #include <mechane/mech-window.h>
 
 /* Basic interfaces */

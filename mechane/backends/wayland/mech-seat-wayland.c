@@ -15,7 +15,7 @@
  * License along with this library. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <mechane/mech-window-private.h>
+#include <mechane/mech-container-private.h>
 #include <xkbcommon/xkbcommon.h>
 #include "mech-cursor-wayland.h"
 #include "mech-seat-wayland.h"
@@ -112,7 +112,7 @@ mech_seat_wayland_check_cursor (MechSeatWayland *seat)
 
   priv = ((MechSeatWayland *) seat)->_priv;
   cursor = (MechCursorWayland *)
-    _mech_window_get_current_cursor (priv->pointer_window);
+    _mech_container_get_current_cursor ((MechContainer *) priv->pointer_window);
 
   if (!cursor)
     {
@@ -172,7 +172,7 @@ _seat_pointer_enter (gpointer           data,
   event.type = MECH_ENTER;
   event.any.seat = data;
   event.any.serial = serial;
-  mech_window_handle_event (priv->pointer_window, &event);
+  mech_container_handle_event ((MechContainer *) priv->pointer_window, &event);
 
   mech_seat_wayland_check_cursor (data);
 }
@@ -189,7 +189,7 @@ _seat_pointer_leave (gpointer           data,
   event.type = MECH_ENTER;
   event.any.seat = data;
   event.any.serial = serial;
-  mech_window_handle_event (priv->pointer_window, &event);
+  mech_container_handle_event ((MechContainer *) priv->pointer_window, &event);
 
   priv->pointer_window = NULL;
   priv->pointer_x = priv->pointer_y = -1;
@@ -219,7 +219,7 @@ _seat_pointer_motion (gpointer           data,
   event.pointer.x = priv->pointer_x = wl_fixed_to_double (surface_x);
   event.pointer.y = priv->pointer_y = wl_fixed_to_double (surface_y);
 
-  mech_window_handle_event (priv->pointer_window, &event);
+  mech_container_handle_event ((MechContainer *) priv->pointer_window, &event);
 
   mech_seat_wayland_check_cursor (data);
 }
@@ -250,7 +250,7 @@ _seat_pointer_button (gpointer           data,
   event.pointer.x = priv->pointer_x;
   event.pointer.y = priv->pointer_y;
 
-  mech_window_handle_event (priv->pointer_window, &event);
+  mech_container_handle_event ((MechContainer *) priv->pointer_window, &event);
   mech_seat_wayland_check_cursor (data);
 }
 
@@ -281,7 +281,7 @@ _seat_pointer_axis (gpointer           data,
   else if (axis == WL_POINTER_AXIS_VERTICAL_SCROLL)
     event.scroll.dy = wl_fixed_to_double (value);
 
-  mech_window_handle_event (priv->pointer_window, &event);
+  mech_container_handle_event ((MechContainer *) priv->pointer_window, &event);
   mech_seat_wayland_check_cursor (data);
 }
 
@@ -376,7 +376,7 @@ _seat_keyboard_enter (gpointer            data,
   event.type = MECH_FOCUS_IN;
   event.any.seat = data;
   event.any.serial = serial;
-  mech_window_handle_event (priv->keyboard_window, &event);
+  mech_container_handle_event ((MechContainer *) priv->keyboard_window, &event);
 }
 
 static void
@@ -391,7 +391,7 @@ _seat_keyboard_leave (gpointer            data,
   event.type = MECH_FOCUS_OUT;
   event.any.seat = data;
   event.any.serial = serial;
-  mech_window_handle_event (priv->keyboard_window, &event);
+  mech_container_handle_event ((MechContainer *) priv->keyboard_window, &event);
 
   priv->keyboard_window = NULL;
 }
@@ -429,7 +429,7 @@ _seat_keyboard_key (gpointer            data,
   if (xkb_keysym_to_utf8 (event.key.keyval, buffer, sizeof (buffer)) > 0)
     event.key.unicode_char = g_utf8_get_char (buffer);
 
-  mech_window_handle_event (priv->keyboard_window, &event);
+  mech_container_handle_event ((MechContainer *) priv->keyboard_window, &event);
 }
 
 static void
@@ -500,7 +500,7 @@ _seat_touch_down (gpointer           data,
   event.pointer.y = wl_fixed_to_double (surface_y);
   event.touch.id = id;
 
-  mech_window_handle_event (priv->pointer_window, &event);
+  mech_container_handle_event ((MechContainer *) priv->pointer_window, &event);
 }
 
 static void
@@ -527,7 +527,7 @@ _seat_touch_up (gpointer         data,
 
   /* FIXME: coordinates here are handy */
 
-  mech_window_handle_event (priv->pointer_window, &event);
+  mech_container_handle_event ((MechContainer *) priv->pointer_window, &event);
 }
 
 static void
@@ -554,7 +554,7 @@ _seat_touch_motion (gpointer         data,
   event.pointer.y = wl_fixed_to_double (surface_y);
   event.touch.id = id;
 
-  mech_window_handle_event (priv->pointer_window, &event);
+  mech_container_handle_event ((MechContainer *) priv->pointer_window, &event);
 }
 
 static void

@@ -32,6 +32,7 @@ G_BEGIN_DECLS
 
 typedef struct _MechContainer MechContainer;
 typedef struct _MechContainerClass MechContainerClass;
+typedef struct _MechContainerPriv MechContainerPriv;
 
 struct _MechContainer
 {
@@ -42,12 +43,44 @@ struct _MechContainerClass
 {
   GObjectClass parent_class;
 
+  void       (* draw)            (MechContainer  *container,
+                                  cairo_t        *cr,
+                                  cairo_region_t *clip);
+  gboolean   (* handle_event)    (MechContainer  *container,
+                                  MechEvent      *event);
+
   MechArea * (* create_root)     (MechContainer  *container);
+
+  void       (* update_notify)   (MechContainer  *container);
+  void       (* size_changed)    (MechContainer  *container,
+                                  gint            width,
+                                  gint            height);
+
+  void       (* grab_focus)      (MechContainer  *container,
+                                  MechArea       *area,
+                                  MechSeat       *seat);
 };
 
 GType      mech_container_get_type        (void) G_GNUC_CONST;
 
+gboolean   mech_container_handle_event    (MechContainer *container,
+                                           MechEvent     *event);
+
+void       mech_container_queue_redraw    (MechContainer *container);
+void       mech_container_queue_resize    (MechContainer *container,
+                                           gint           width,
+                                           gint           height);
+void       mech_container_process_updates (MechContainer *container);
+
+gboolean   mech_container_get_size        (MechContainer *container,
+                                           gint          *width,
+                                           gint          *height);
 MechArea * mech_container_get_root        (MechContainer *container);
+
+MechArea * mech_container_get_focus       (MechContainer *container);
+void       mech_container_grab_focus      (MechContainer *container,
+                                           MechArea      *area,
+                                           MechSeat      *seat);
 
 G_END_DECLS
 

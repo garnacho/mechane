@@ -169,12 +169,12 @@ _window_shell_surface_configure (gpointer                 data,
   gint tx, ty;
 
   priv = ((MechWindowWayland *) window)->_priv;
-  mech_window_get_size (window, &prev_width, &prev_height);
-  mech_window_set_size (window, width, height);
+  mech_container_get_size ((MechContainer *) window, &prev_width, &prev_height);
+  mech_container_queue_resize ((MechContainer *) window, width, height);
   tx = ty = 0;
 
   /* Fetch again the size after applying minimal requisition */
-  mech_window_get_size (window, &width, &height);
+  mech_container_get_size ((MechContainer *) window, &width, &height);
 
   if (edges == WL_SHELL_SURFACE_RESIZE_LEFT ||
       edges == WL_SHELL_SURFACE_RESIZE_TOP_LEFT ||
@@ -237,7 +237,7 @@ mech_window_wayland_set_visible (MechWindow *window,
       if (!priv->surface)
         priv->surface = _mech_surface_wayland_new (MECH_BACKING_SURFACE_TYPE_EGL,
                                                    priv->wl_surface);
-      _mech_window_set_surface (window, priv->surface);
+      _mech_container_set_surface ((MechContainer *) window, priv->surface);
     }
   else
     {
@@ -256,7 +256,8 @@ mech_window_wayland_push_update (MechWindow     *window,
     {
       cairo_rectangle_int_t rect = { 0 };
 
-      mech_window_get_size (window, &rect.width, &rect.height);
+      mech_container_get_size ((MechContainer *) window,
+                               &rect.width, &rect.height);
       region = cairo_region_create_rectangle (&rect);
     }
   else

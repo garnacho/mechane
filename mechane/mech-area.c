@@ -22,7 +22,7 @@
 #include <mechane/mech-marshal.h>
 #include <mechane/mech-stage-private.h>
 #include <mechane/mech-renderer-private.h>
-#include <mechane/mech-window-private.h>
+#include <mechane/mech-container-private.h>
 #include <mechane/mech-area-private.h>
 #include <mechane/mech-enum-types.h>
 
@@ -894,7 +894,7 @@ _mech_area_get_stage (MechArea *area)
   if (!window)
     return NULL;
 
-  return _mech_window_get_stage (window);
+  return _mech_container_get_stage ((MechContainer *) window);
 }
 
 MechWindow *
@@ -1243,7 +1243,7 @@ mech_area_set_matrix (MechArea             *area,
 
   if (window)
     {
-      stage = _mech_window_get_stage (window);
+      stage = _mech_container_get_stage ((MechContainer *) window);
       _mech_stage_invalidate (stage, area, NULL, TRUE);
     }
 
@@ -1254,7 +1254,7 @@ mech_area_set_matrix (MechArea             *area,
   if (stage)
     {
       _mech_stage_invalidate (stage, area, NULL, TRUE);
-      mech_window_queue_draw (window);
+      mech_container_queue_redraw ((MechContainer *) window);
     }
 }
 
@@ -1799,9 +1799,9 @@ mech_area_redraw (MechArea       *area,
   if (!window)
     return;
 
-  stage = _mech_window_get_stage (window);
+  stage = _mech_container_get_stage ((MechContainer *) window);
   _mech_stage_invalidate (stage, area, region, FALSE);
-  mech_window_queue_draw (window);
+  mech_container_queue_redraw ((MechContainer *) window);
 }
 
 static gdouble
@@ -2027,7 +2027,7 @@ mech_area_grab_focus (MechArea *area,
   g_return_if_fail (MECH_IS_SEAT (seat));
 
   window = mech_area_get_window (area);
-  _mech_window_grab_focus (window, area, seat);
+  mech_container_grab_focus ((MechContainer *) window, area, seat);
 }
 
 void

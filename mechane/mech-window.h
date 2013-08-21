@@ -46,10 +46,6 @@ struct _MechWindowClass
 {
   MechContainerClass parent_class;
 
-  void     (* draw)          (MechWindow        *window,
-                              cairo_t           *cr);
-  gboolean (* handle_event)  (MechWindow        *window,
-                              MechEvent         *event);
   void     (* push_update)   (MechWindow        *window,
                               cairo_region_t    *region);
 
@@ -67,25 +63,11 @@ struct _MechWindowClass
                               gboolean           visible);
 
   gboolean (* close_request) (MechWindow        *window);
-
-  void     (* size_changed)  (MechWindow        *window,
-                              gint               width,
-                              gint               height);
 };
 
 GType             mech_window_get_type      (void) G_GNUC_CONST;
 
 MechWindow      * mech_window_new           (void);
-
-gboolean          mech_window_handle_event  (MechWindow      *window,
-                                             MechEvent       *event);
-
-void              mech_window_set_size      (MechWindow      *window,
-                                             gint             width,
-                                             gint             height);
-void              mech_window_get_size      (MechWindow      *window,
-                                             gint            *width,
-                                             gint            *height);
 
 void              mech_window_set_resizable (MechWindow      *window,
                                              gboolean         resizable);
@@ -106,8 +88,6 @@ void              mech_window_set_title     (MechWindow      *window,
 const gchar     * mech_window_get_title     (MechWindow      *window);
 
 MechMonitor     * mech_window_get_monitor   (MechWindow      *window);
-
-void              mech_window_queue_draw    (MechWindow      *window);
 
 gboolean          mech_window_move          (MechWindow      *window,
                                              MechEvent       *event);
