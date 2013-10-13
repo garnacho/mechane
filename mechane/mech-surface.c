@@ -551,14 +551,12 @@ _mech_surface_update_viewport (MechSurface *surface)
       _mech_surface_update_scale (surface))
     {
       _mech_surface_update_cached_rect (surface, &rect, FALSE, NULL, NULL);
-      _mech_surface_update_surface (surface);
       _mech_surface_damage (surface, &priv->cached_rect);
     }
   else if (needs_surface_update ||
            !_mech_area_get_node (priv->area)->parent)
     {
       _mech_surface_update_cached_rect (surface, &rect, TRUE, &dx, &dy);
-      _mech_surface_update_surface (surface);
 
       if (needs_surface_update && (dx != 0 || dy != 0))
         _mech_surface_self_copy (surface, dx, dy);
@@ -660,6 +658,7 @@ _mech_surface_cairo_create (MechSurface *surface)
   cairo_t *cr;
 
   priv = mech_surface_get_instance_private (surface);
+  _mech_surface_update_surface (surface);
   _mech_surface_update_viewport (surface);
 
   cairo_surface = MECH_SURFACE_GET_CLASS (surface)->get_surface (surface);
