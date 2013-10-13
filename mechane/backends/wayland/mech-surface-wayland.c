@@ -68,14 +68,28 @@ mech_surface_wayland_get_property (GObject    *object,
     }
 }
 
+static void
+mech_surface_wayland_push_update (MechSurface          *surface,
+                                  const cairo_region_t *region)
+{
+  MechSurfaceWaylandPriv *priv;
+
+  priv = ((MechSurfaceWayland *) surface)->_priv;
+
+  if (priv->wl_surface)
+    wl_surface_commit (priv->wl_surface);
+}
 
 static void
 mech_surface_wayland_class_init (MechSurfaceWaylandClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
+  MechSurfaceClass *surface_class = MECH_SURFACE_CLASS (klass);
 
   object_class->set_property = mech_surface_wayland_set_property;
   object_class->get_property = mech_surface_wayland_get_property;
+
+  surface_class->push_update = mech_surface_wayland_push_update;
 
   g_object_class_install_property (object_class,
                                    PROP_WL_SURFACE,
@@ -142,31 +156,6 @@ _mech_surface_wayland_new (MechBackingSurfaceType  type,
     }
 
   return surface;
-}
-
-gboolean
-_mech_surface_wayland_attach (MechSurfaceWayland *surface)
-{
-  MechSurfaceWaylandClass *surface_class;
-
-  g_return_val_if_fail (MECH_IS_SURFACE_WAYLAND (surface), FALSE);
-
-  surface_class = MECH_SURFACE_WAYLAND_GET_CLASS (surface);
-
-  if (!surface_class->attach)
-    return TRUE;
-
-  return surface_class->attach (surface);
-}
-
-void
-_mech_surface_wayland_damage (MechSurfaceWayland   *surface,
-                              const cairo_region_t *region)
-{
-  g_return_if_fail (MECH_IS_SURFACE_WAYLAND (surface));
-  g_return_if_fail (region != NULL);
-
-  MECH_SURFACE_WAYLAND_GET_CLASS (surface)->damage (surface, region);
 }
 
 void

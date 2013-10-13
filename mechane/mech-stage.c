@@ -316,6 +316,7 @@ render_stage_context_pop_target (RenderStageContext *context)
   g_array_remove_index (context->target_stack,
                         context->target_stack->len - 1);
 
+  _mech_surface_push_update (offscreen->node.data);
   _mech_surface_release (offscreen->node.data);
 
   return offscreen;

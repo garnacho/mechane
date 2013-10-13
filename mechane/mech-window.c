@@ -166,8 +166,10 @@ mech_window_draw (MechContainer  *container,
   MechWindow *window = (MechWindow *) container;
   MechWindowPrivate *priv;
 
+  if (!mech_window_get_visible (window))
+    return;
+
   MECH_CONTAINER_CLASS (mech_window_parent_class)->draw (container, cr, clip);
-  MECH_WINDOW_GET_CLASS (window)->push_update (window, clip);
 }
 
 static void

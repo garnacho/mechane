@@ -724,6 +724,22 @@ _mech_surface_get_damage_region (MechSurface *surface)
   return region;
 }
 
+void
+_mech_surface_push_update (MechSurface *surface)
+{
+  MechSurfaceClass *surface_class;
+  cairo_region_t *region;
+
+  surface_class = MECH_SURFACE_GET_CLASS (surface);
+
+  if (!surface_class->push_update)
+    return;
+
+  region = _mech_surface_get_damage_region (surface);
+  surface_class->push_update (surface, region);
+  cairo_region_destroy (region);
+}
+
 gboolean
 _mech_surface_apply_clip (MechSurface *surface,
                           cairo_t     *cr)

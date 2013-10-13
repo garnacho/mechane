@@ -52,6 +52,9 @@ struct _MechSurfaceClass
   void              (* release)     (MechSurface *surface);
 
   gint              (* get_age)     (MechSurface *surface);
+
+  void              (* push_update) (MechSurface          *surface,
+                                     const cairo_region_t *region);
 };
 
 GType            mech_surface_get_type          (void) G_GNUC_CONST;
@@ -72,6 +75,8 @@ void             _mech_surface_set_source       (cairo_t           *cr,
 
 gboolean         _mech_surface_acquire          (MechSurface       *surface);
 void             _mech_surface_release          (MechSurface       *surface);
+
+void             _mech_surface_push_update      (MechSurface       *surface);
 
 void             _mech_surface_damage           (MechSurface       *surface,
                                                  cairo_rectangle_t *rect);

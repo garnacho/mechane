@@ -48,9 +48,6 @@ struct _MechSurfaceWaylandClass
   void     (* translate) (MechSurfaceWayland   *surface,
                           gint                  tx,
                           gint                  ty);
-  gboolean (* attach)    (MechSurfaceWayland   *surface);
-  void     (* damage)    (MechSurfaceWayland   *wayland,
-                          const cairo_region_t *region);
 };
 
 typedef enum {
@@ -65,9 +62,6 @@ MechSurface * _mech_surface_wayland_new       (MechBackingSurfaceType  type,
 void          _mech_surface_wayland_translate (MechSurfaceWayland     *surface,
                                                gint                    tx,
                                                gint                    ty);
-gboolean      _mech_surface_wayland_attach    (MechSurfaceWayland     *surface);
-void          _mech_surface_wayland_damage    (MechSurfaceWayland     *surface,
-                                               const cairo_region_t   *region);
 
 G_END_DECLS
 

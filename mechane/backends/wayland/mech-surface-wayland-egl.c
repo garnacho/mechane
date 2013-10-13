@@ -219,8 +219,8 @@ mech_surface_wayland_egl_translate (MechSurfaceWayland *surface,
 }
 
 static void
-mech_surface_wayland_egl_damage (MechSurfaceWayland   *surface,
-                                 const cairo_region_t *region)
+mech_surface_wayland_egl_push_update (MechSurface          *surface,
+                                      const cairo_region_t *region)
 {
   MechSurfaceWaylandEGL *surface_egl = (MechSurfaceWaylandEGL *) surface;
   MechSurfaceWaylandEGLPriv *priv = surface_egl->_priv;
@@ -261,6 +261,8 @@ mech_surface_wayland_egl_damage (MechSurfaceWayland   *surface,
     }
   else
     cairo_gl_surface_swapbuffers (priv->surface);
+
+  MECH_SURFACE_CLASS (mech_surface_wayland_egl_parent_class)->push_update (surface, region);
 }
 
 static void
@@ -279,10 +281,10 @@ mech_surface_wayland_egl_class_init (MechSurfaceWaylandEGLClass *klass)
   surface_class->get_surface = mech_surface_wayland_egl_get_surface;
   surface_class->set_size = mech_surface_wayland_egl_set_size;
   surface_class->get_age = mech_surface_wayland_egl_get_age;
+  surface_class->push_update = mech_surface_wayland_egl_push_update;
 
   surface_wayland_class = (MechSurfaceWaylandClass *) klass;
   surface_wayland_class->translate = mech_surface_wayland_egl_translate;
-  surface_wayland_class->damage = mech_surface_wayland_egl_damage;
 
   g_type_class_add_private (klass, sizeof (MechSurfaceWaylandEGLPriv));
 }

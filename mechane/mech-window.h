@@ -46,9 +46,6 @@ struct _MechWindowClass
 {
   MechContainerClass parent_class;
 
-  void     (* push_update)   (MechWindow        *window,
-                              cairo_region_t    *region);
-
   gboolean (* move)          (MechWindow        *window,
                               MechEvent         *event);
   gboolean (* resize)        (MechWindow        *window,

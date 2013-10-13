@@ -171,6 +171,34 @@ mech_surface_wayland_shm_get_age (MechSurface *surface)
 }
 
 static void
+mech_surface_wayland_shm_push_update (MechSurface          *surface,
+                                      const cairo_region_t *region)
+{
+  MechSurfaceWaylandSHM *shm_surface = (MechSurfaceWaylandSHM *) surface;
+  MechSurfaceWaylandSHMPriv *priv = shm_surface->_priv;
+  struct wl_surface *wl_surface;
+  cairo_rectangle_int_t rect;
+  gint i;
+
+  g_object_get (surface, "wl-surface", &wl_surface, NULL);
+
+  if (wl_surface)
+    {
+      for (i = 0; i < cairo_region_num_rectangles (region); i++)
+        {
+          cairo_region_get_rectangle (region, i, &rect);
+          wl_surface_damage (wl_surface, rect.x, rect.y,
+                             rect.width, rect.height);
+        }
+
+      wl_surface_attach (wl_surface, priv->wl_buffer, priv->tx, priv->ty);
+      priv->tx = priv->ty = 0;
+    }
+
+  MECH_SURFACE_CLASS (mech_surface_wayland_shm_parent_class)->push_update (surface, region);
+}
+
+static void
 mech_surface_wayland_shm_translate (MechSurfaceWayland *surface,
                                     gint                tx,
                                     gint                ty)
@@ -180,41 +208,6 @@ mech_surface_wayland_shm_translate (MechSurfaceWayland *surface,
 
   priv->tx += tx;
   priv->ty += ty;
-}
-
-static gboolean
-mech_surface_wayland_shm_attach (MechSurfaceWayland *surface)
-{
-  MechSurfaceWaylandSHM *shm_surface = (MechSurfaceWaylandSHM *) surface;
-  MechSurfaceWaylandSHMPriv *priv = shm_surface->_priv;
-  struct wl_surface *wl_surface;
-
-  if (!priv->wl_buffer)
-    return FALSE;
-
-  g_object_get (surface, "wl-surface", &wl_surface, NULL);
-  wl_surface_attach (wl_surface, priv->wl_buffer, priv->tx, priv->ty);
-  priv->tx = priv->ty = 0;
-
-  return TRUE;
-}
-
-static void
-mech_surface_wayland_shm_damage (MechSurfaceWayland   *surface,
-                                 const cairo_region_t *region)
-{
-  struct wl_surface *wl_surface;
-  cairo_rectangle_int_t rect;
-  gint i;
-
-  g_object_get (surface, "wl-surface", &wl_surface, NULL);
-
-  for (i = 0; i < cairo_region_num_rectangles (region); i++)
-    {
-      cairo_region_get_rectangle (region, i, &rect);
-      wl_surface_damage (wl_surface, rect.x, rect.y,
-                         rect.width, rect.height);
-    }
 }
 
 static void
@@ -232,11 +225,10 @@ mech_surface_wayland_shm_class_init (MechSurfaceWaylandSHMClass *klass)
   surface_class->get_surface = mech_surface_wayland_shm_get_surface;
   surface_class->release = mech_surface_wayland_shm_release;
   surface_class->get_age = mech_surface_wayland_shm_get_age;
+  surface_class->push_update = mech_surface_wayland_shm_push_update;
 
   surface_wayland_class = MECH_SURFACE_WAYLAND_CLASS (klass);
   surface_wayland_class->translate = mech_surface_wayland_shm_translate;
-  surface_wayland_class->attach = mech_surface_wayland_shm_attach;
-  surface_wayland_class->damage = mech_surface_wayland_shm_damage;
 
   g_type_class_add_private (klass, sizeof (MechSurfaceWaylandSHMPriv));
 }
