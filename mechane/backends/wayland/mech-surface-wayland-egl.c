@@ -130,6 +130,7 @@ mech_surface_wayland_egl_release (MechSurface *surface)
 
   if (priv->surface)
     {
+      cairo_surface_flush (priv->surface);
       surface_device = cairo_surface_get_device (priv->surface);
 
       if (surface_device != priv->egl_config->argb_device ||
