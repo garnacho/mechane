@@ -53,6 +53,11 @@ struct _MechSurfaceClass
 
   gint              (* get_age)     (MechSurface *surface);
 
+  gboolean          (* set_parent)  (MechSurface *surface,
+                                     MechSurface *parent);
+  void              (* set_above)   (MechSurface *surface,
+                                     MechSurface *sibling);
+
   void              (* push_update) (MechSurface          *surface,
                                      const cairo_region_t *region);
 
@@ -91,6 +96,12 @@ gboolean         _mech_surface_area_is_rendered (MechSurface       *surface,
                                                  MechArea          *area,
                                                  cairo_rectangle_t *rect);
 
+MechSurface *    _mech_surface_get_parent       (MechSurface       *surface);
+gboolean         _mech_surface_set_parent       (MechSurface       *surface,
+                                                 MechSurface       *parent);
+MechSurface *    _mech_surface_get_above        (MechSurface       *surface);
+void             _mech_surface_set_above        (MechSurface       *surface,
+                                                 MechSurface       *sibling);
 
 MechSurfaceType  _mech_surface_get_surface_type  (MechSurface      *surface);
 MechRendererType _mech_surface_get_renderer_type (MechSurface      *surface);

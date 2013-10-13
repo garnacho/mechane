@@ -45,6 +45,8 @@ typedef struct _MechSurfacePrivate MechSurfacePrivate;
 
 enum {
   PROP_AREA = 1,
+  PROP_PARENT,
+  PROP_ABOVE,
   PROP_SURFACE_TYPE,
   PROP_RENDERER_TYPE
 };
@@ -52,6 +54,8 @@ enum {
 struct _MechSurfacePrivate
 {
   MechArea *area;
+  MechSurface *parent;
+  MechSurface *above;
 
   /* area coordinates */
   cairo_rectangle_t cached_rect;
@@ -78,6 +82,13 @@ static gint
 mech_surface_get_age_impl (MechSurface *surface)
 {
   return 0;
+}
+
+static gboolean
+mech_surface_set_parent_impl (MechSurface *surface,
+                              MechSurface *parent)
+{
+  return TRUE;
 }
 
 static void
@@ -119,6 +130,12 @@ mech_surface_get_property (GObject    *object,
     case PROP_AREA:
       g_value_set_object (value, priv->area);
       break;
+    case PROP_PARENT:
+      g_value_set_object (value, priv->parent);
+      break;
+    case PROP_ABOVE:
+      g_value_set_object (value, priv->above);
+      break;
     case PROP_SURFACE_TYPE:
       g_value_set_enum (value, priv->surface_type);
       break;
@@ -147,6 +164,12 @@ mech_surface_set_property (GObject      *object,
     case PROP_AREA:
       priv->area = g_value_get_object (value);
       break;
+    case PROP_PARENT:
+      _mech_surface_set_parent (surface, g_value_get_object (value));
+      break;
+    case PROP_ABOVE:
+      _mech_surface_set_above (surface, g_value_get_object (value));
+      break;
     case PROP_SURFACE_TYPE:
       priv->surface_type = g_value_get_enum (value);
       break;
@@ -168,6 +191,12 @@ mech_surface_finalize (GObject *object)
   if (priv->damaged)
     g_array_unref (priv->damaged);
 
+  if (priv->parent)
+    g_object_unref (priv->parent);
+
+  if (priv->above)
+    g_object_unref (priv->above);
+
   G_OBJECT_CLASS (mech_surface_parent_class)->finalize (object);
 }
 
@@ -177,6 +206,7 @@ mech_surface_class_init (MechSurfaceClass *klass)
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
   klass->get_age = mech_surface_get_age_impl;
+  klass->set_parent = mech_surface_set_parent_impl;
   klass->render = mech_surface_render_impl;
 
   object_class->get_property = mech_surface_get_property;
@@ -189,6 +219,22 @@ mech_surface_class_init (MechSurfaceClass *klass)
                                                         "area",
                                                         "area",
                                                         MECH_TYPE_AREA,
+                                                        G_PARAM_READWRITE |
+                                                        G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (object_class,
+                                   PROP_PARENT,
+                                   g_param_spec_object ("parent",
+                                                        "Parent Surface",
+                                                        "Parent Surface",
+                                                        MECH_TYPE_SURFACE,
+                                                        G_PARAM_READWRITE |
+                                                        G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (object_class,
+                                   PROP_ABOVE,
+                                   g_param_spec_object ("above",
+                                                        "Sibling surface to place above",
+                                                        "Sibling surface to place above",
+                                                        MECH_TYPE_SURFACE,
                                                         G_PARAM_READWRITE |
                                                         G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (object_class,
@@ -924,6 +970,82 @@ _mech_surface_area_is_rendered (MechSurface       *surface,
     }
 
   return x2 > x1 && y2 > y1;
+}
+
+MechSurface *
+_mech_surface_get_parent (MechSurface *surface)
+{
+  MechSurfacePrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_SURFACE (surface), NULL);
+
+  priv = mech_surface_get_instance_private (surface);
+  return priv->parent;
+}
+
+gboolean
+_mech_surface_set_parent (MechSurface *surface,
+                          MechSurface *parent)
+{
+  MechSurfacePrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_SURFACE (surface), NULL);
+
+  priv = mech_surface_get_instance_private (surface);
+
+  if (priv->parent == parent)
+    return TRUE;
+
+  if (priv->parent)
+    {
+      g_object_unref (priv->parent);
+      priv->parent = NULL;
+    }
+
+  if (MECH_SURFACE_GET_CLASS (surface)->set_parent (surface, parent))
+    {
+      priv->parent = (parent) ? g_object_ref (parent) : NULL;
+      g_object_notify ((GObject *) surface, "parent");
+      return TRUE;
+    }
+
+  return FALSE;
+}
+
+MechSurface *
+_mech_surface_get_above (MechSurface *surface)
+{
+  MechSurfacePrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_SURFACE (surface), NULL);
+
+  priv = mech_surface_get_instance_private (surface);
+
+  return priv->above;
+}
+
+void
+_mech_surface_set_above (MechSurface *surface,
+                         MechSurface *sibling)
+{
+  MechSurfacePrivate *priv;
+
+  g_return_if_fail (MECH_IS_SURFACE (surface));
+
+  priv = mech_surface_get_instance_private (surface);
+
+  if (priv->above == sibling)
+    return;
+
+  if (sibling)
+    g_object_ref (sibling);
+
+  if (priv->above)
+    g_object_unref (priv->above);
+
+  MECH_SURFACE_GET_CLASS (surface)->set_above (surface, sibling);
+  priv->above = sibling;
+  g_object_notify ((GObject *) surface, "above");
 }
 
 void
