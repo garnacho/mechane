@@ -50,12 +50,13 @@ _mech_animation_set_clock (MechAnimation *animation,
   if (priv->clock)
     {
       _mech_clock_detach_animation (priv->clock, animation);
+      g_object_unref (priv->clock);
       priv->clock = NULL;
     }
 
   if (clock)
     {
-      priv->clock = clock;
+      priv->clock = g_object_ref (clock);
       _mech_clock_attach_animation (priv->clock, animation);
     }
 }
