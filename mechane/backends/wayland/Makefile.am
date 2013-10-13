@@ -11,7 +11,7 @@ mech_wayland_sources =			\
 	mech-surface-wayland-shm.c	\
 	mech-window-wayland.c
 
-AM_CPPFLAGS = $(MECH_DEPS_CFLAGS) $(MECH_WAYLAND_DEPS_CFLAGS) $(MECH_EGL_DEPS_CFLAGS)
+AM_CPPFLAGS = $(CFLAGS) $(MECH_DEPS_CFLAGS) $(MECH_WAYLAND_DEPS_CFLAGS) $(MECH_EGL_DEPS_CFLAGS)
 
 lib_LTLIBRARIES = libmechane-wayland-@MECH_API_VERSION@.la
 libmechane_waylandincludedir = $(includedir)/mechane-$(MECH_API_VERSION)/mechane/

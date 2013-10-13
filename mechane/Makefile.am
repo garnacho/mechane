@@ -58,7 +58,7 @@ mech_sources = 			\
 	mech-window-frame.c	\
 	mech-window.c
 
-AM_CPPFLAGS = $(MECH_DEPS_CFLAGS)
+AM_CPPFLAGS = $(CFLAGS) $(MECH_DEPS_CFLAGS)
 
 lib_LTLIBRARIES = libmechane-@MECH_API_VERSION@.la
 libmechaneincludedir = $(includedir)/mechane-$(MECH_API_VERSION)/mechane/
