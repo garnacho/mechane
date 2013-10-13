@@ -295,13 +295,9 @@ static gboolean
 _mech_surface_update_backing_size (MechSurface *surface)
 {
   gint new_cache_width, new_cache_height;
-  cairo_rectangle_t allocation;
   MechSurfacePrivate *priv;
 
   priv = mech_surface_get_instance_private (surface);
-  mech_area_get_allocated_size (priv->area, &allocation);
-  allocation.x = allocation.y = 0;
-
   _calculate_cache_size (surface, &new_cache_width, &new_cache_height);
 
   if (priv->cache_width != new_cache_width ||
