@@ -295,4 +295,7 @@ mech_surface_wayland_egl_init (MechSurfaceWaylandEGL *surface)
   surface->_priv = G_TYPE_INSTANCE_GET_PRIVATE (surface,
                                                 MECH_TYPE_SURFACE_WAYLAND_EGL,
                                                 MechSurfaceWaylandEGLPriv);
+  g_object_set (surface,
+                "renderer-type", MECH_RENDERER_TYPE_GL,
+                NULL);
 }

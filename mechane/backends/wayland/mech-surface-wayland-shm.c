@@ -239,4 +239,7 @@ mech_surface_wayland_shm_init (MechSurfaceWaylandSHM *surface)
   surface->_priv = G_TYPE_INSTANCE_GET_PRIVATE (surface,
                                                 MECH_TYPE_SURFACE_WAYLAND_SHM,
                                                 MechSurfaceWaylandSHMPriv);
+  g_object_set (surface,
+                "renderer-type", MECH_RENDERER_TYPE_SOFTWARE,
+                NULL);
 }

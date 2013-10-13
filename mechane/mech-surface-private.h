@@ -91,6 +91,11 @@ gboolean         _mech_surface_area_is_rendered (MechSurface       *surface,
                                                  MechArea          *area,
                                                  cairo_rectangle_t *rect);
 
+
+MechSurfaceType  _mech_surface_get_surface_type  (MechSurface      *surface);
+MechRendererType _mech_surface_get_renderer_type (MechSurface      *surface);
+
+
 G_END_DECLS
 
 #endif /* __MECH_SURFACE_PRIVATE_H__ */

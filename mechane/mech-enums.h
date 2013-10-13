@@ -136,6 +136,18 @@ typedef enum {
   MECH_CURSOR_DRAG_BOTTOM_RIGHT
 } MechCursorType;
 
+typedef enum {
+  MECH_SURFACE_TYPE_NONE,
+  MECH_SURFACE_TYPE_OFFSCREEN,
+  MECH_SURFACE_TYPE_SOFTWARE,
+  MECH_SURFACE_TYPE_GL
+} MechSurfaceType;
+
+typedef enum {
+  MECH_RENDERER_TYPE_SOFTWARE,
+  MECH_RENDERER_TYPE_GL
+} MechRendererType;
+
 G_END_DECLS
 
 #endif /* __MECH_ENUMS_H__ */

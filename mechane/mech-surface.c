@@ -44,7 +44,9 @@
 typedef struct _MechSurfacePrivate MechSurfacePrivate;
 
 enum {
-  PROP_AREA = 1
+  PROP_AREA = 1,
+  PROP_SURFACE_TYPE,
+  PROP_RENDERER_TYPE
 };
 
 struct _MechSurfacePrivate
@@ -65,6 +67,9 @@ struct _MechSurfacePrivate
 
   gdouble scale_x;
   gdouble scale_y;
+
+  guint surface_type  : 3;
+  guint renderer_type : 2;
 };
 
 G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MechSurface, mech_surface, G_TYPE_OBJECT)
@@ -114,6 +119,12 @@ mech_surface_get_property (GObject    *object,
     case PROP_AREA:
       g_value_set_object (value, priv->area);
       break;
+    case PROP_SURFACE_TYPE:
+      g_value_set_enum (value, priv->surface_type);
+      break;
+    case PROP_RENDERER_TYPE:
+      g_value_set_enum (value , priv->renderer_type);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
@@ -126,13 +137,21 @@ mech_surface_set_property (GObject      *object,
                            GParamSpec   *pspec)
 {
   MechSurfacePrivate *priv;
+  MechSurface *surface;
 
-  priv = mech_surface_get_instance_private ((MechSurface *) object);
+  surface = (MechSurface *) object;
+  priv = mech_surface_get_instance_private (surface);
 
   switch (prop_id)
     {
     case PROP_AREA:
       priv->area = g_value_get_object (value);
+      break;
+    case PROP_SURFACE_TYPE:
+      priv->surface_type = g_value_get_enum (value);
+      break;
+    case PROP_RENDERER_TYPE:
+      priv->renderer_type = g_value_get_enum (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -172,6 +191,25 @@ mech_surface_class_init (MechSurfaceClass *klass)
                                                         MECH_TYPE_AREA,
                                                         G_PARAM_READWRITE |
                                                         G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (object_class,
+                                   PROP_SURFACE_TYPE,
+                                   g_param_spec_enum ("surface-type",
+                                                      "Surface type",
+                                                      "Surface type",
+                                                      MECH_TYPE_SURFACE_TYPE,
+                                                      MECH_SURFACE_TYPE_SOFTWARE,
+                                                      G_PARAM_READWRITE |
+                                                      G_PARAM_CONSTRUCT |
+                                                      G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (object_class,
+                                   PROP_RENDERER_TYPE,
+                                   g_param_spec_enum ("renderer-type",
+                                                      "Renderer type",
+                                                      "Renderer type",
+                                                      MECH_TYPE_RENDERER_TYPE,
+                                                      MECH_RENDERER_TYPE_SOFTWARE,
+                                                      G_PARAM_READWRITE |
+                                                      G_PARAM_STATIC_STRINGS));
 }
 
 static void
@@ -182,6 +220,8 @@ mech_surface_init (MechSurface *surface)
   priv = mech_surface_get_instance_private (surface);
   priv->scale_x = 1;
   priv->scale_y = 1;
+  priv->surface_type = MECH_SURFACE_TYPE_SOFTWARE;
+  priv->renderer_type = MECH_RENDERER_TYPE_SOFTWARE;
   priv->damage_cache = g_array_new (FALSE, FALSE, sizeof (cairo_region_t *));
 }
 
@@ -894,4 +934,26 @@ _mech_surface_render (MechSurface *surface,
   g_return_if_fail (cr != NULL);
 
   MECH_SURFACE_GET_CLASS (surface)->render (surface, cr);
+}
+
+MechSurfaceType
+_mech_surface_get_surface_type (MechSurface *surface)
+{
+  MechSurfacePrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_SURFACE (surface), MECH_SURFACE_TYPE_NONE);
+
+  priv = mech_surface_get_instance_private (surface);
+  return priv->surface_type;
+}
+
+MechRendererType
+_mech_surface_get_renderer_type (MechSurface *surface)
+{
+  MechSurfacePrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_SURFACE (surface), MECH_SURFACE_TYPE_NONE);
+
+  priv = mech_surface_get_instance_private (surface);
+  return priv->renderer_type;
 }
