@@ -513,13 +513,13 @@ _mech_surface_get_age (MechSurface *surface)
   return age;
 }
 
-void
+static void
 _mech_surface_update_viewport (MechSurface *surface)
 {
   cairo_rectangle_t rect, allocation;
   gdouble x1, y1, x2, y2, dx, dy;
-  gboolean needs_surface_update;
   MechSurfacePrivate *priv;
+  gboolean needs_scroll;
 
   priv = mech_surface_get_instance_private (surface);
   _mech_area_get_visible_rect (priv->area, &rect);
@@ -540,7 +540,7 @@ _mech_surface_update_viewport (MechSurface *surface)
       y2 = rect.y + rect.height;
     }
 
-  needs_surface_update =
+  needs_scroll =
     (x1 < priv->cached_rect.x ||
      x2 > priv->cached_rect.x + priv->cached_rect.width ||
      y1 < priv->cached_rect.y ||
@@ -553,12 +553,11 @@ _mech_surface_update_viewport (MechSurface *surface)
       _mech_surface_update_cached_rect (surface, &rect, FALSE, NULL, NULL);
       _mech_surface_damage (surface, &priv->cached_rect);
     }
-  else if (needs_surface_update ||
-           !_mech_area_get_node (priv->area)->parent)
+  else if (needs_scroll || !_mech_area_get_node (priv->area)->parent)
     {
       _mech_surface_update_cached_rect (surface, &rect, TRUE, &dx, &dy);
 
-      if (needs_surface_update && (dx != 0 || dy != 0))
+      if (needs_scroll && (dx != 0 || dy != 0))
         _mech_surface_self_copy (surface, dx, dy);
     }
 }
