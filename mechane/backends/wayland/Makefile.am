@@ -2,6 +2,7 @@ mech_wayland_sources =			\
 	mech-backend-wayland.c		\
 	mech-clock-wayland.c		\
 	mech-cursor-wayland.c		\
+	mech-egl-config.c		\
 	mech-event-source-wayland.c	\
 	mech-monitor-wayland.c		\
 	mech-seat-wayland.c		\

@@ -27,6 +27,7 @@
 #include <cairo-gl.h>
 #include "mech-backend-wayland.h"
 #include "mech-surface-wayland-egl.h"
+#include "mech-egl-config.h"
 
 static void mech_surface_wayland_egl_initable_iface_init (GInitableIface *iface);
 
@@ -35,25 +36,9 @@ G_DEFINE_TYPE_WITH_CODE (MechSurfaceWaylandEGL, mech_surface_wayland_egl,
                          G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
                                                 mech_surface_wayland_egl_initable_iface_init))
 
-G_DEFINE_QUARK (MechSurfaceEGLError, mech_surface_egl_error)
-
-typedef struct _MechGLConfig MechGLConfig;
-
-struct _MechGLConfig
-{
-  EGLDisplay egl_display;
-  EGLConfig egl_argb_config;
-  EGLContext egl_argb_context;
-  cairo_device_t *argb_device;
-  GError *error;
-
-  guint has_swap_buffers_with_damage_ext : 1;
-  guint has_buffer_age_ext               : 1;
-};
-
 struct _MechSurfaceWaylandEGLPriv
 {
-  MechGLConfig *gl_config;
+  MechEGLConfig *egl_config;
   struct wl_egl_window *wl_egl_window;
   EGLSurface egl_surface;
   cairo_surface_t *surface;
@@ -62,125 +47,14 @@ struct _MechSurfaceWaylandEGLPriv
   int ty;
 };
 
-MechGLConfig *
-_create_gl_config (void)
-{
-  EGLint major, minor, n_configs;
-  MechBackendWayland *backend;
-  const gchar *extensions;
-  MechGLConfig *config;
-  GError *error;
-  static const EGLint argb_config_attributes[] = {
-    EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-    EGL_RED_SIZE, 8,
-    EGL_GREEN_SIZE, 8,
-    EGL_BLUE_SIZE, 8,
-    EGL_ALPHA_SIZE, 8,
-    EGL_DEPTH_SIZE, 24,
-    EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT,
-    EGL_NONE
-  };
-
-  config = g_new0 (MechGLConfig, 1);
-  backend = _mech_backend_wayland_get ();
-  config->egl_display = eglGetDisplay (backend->wl_display);
-
-  if (eglInitialize (config->egl_display, &major, &minor) == EGL_FALSE)
-    {
-      error = g_error_new (mech_surface_egl_error_quark (), 0,
-                           "Could not initialize EGL");
-      goto init_failed;
-    }
-
-  if (eglBindAPI (EGL_OPENGL_API) == EGL_FALSE)
-    {
-      error = g_error_new (mech_surface_egl_error_quark (), 0,
-                           "Could not bind a rendering API");
-      goto init_failed;
-    }
-
-  if (eglChooseConfig (config->egl_display, argb_config_attributes,
-                       &config->egl_argb_config, 1, &n_configs) == EGL_FALSE)
-    {
-      error = g_error_new (mech_surface_egl_error_quark (), 0,
-                           "Could not find a matching configuration");
-      goto init_failed;
-    }
-
-  config->egl_argb_context = eglCreateContext (config->egl_display,
-                                               config->egl_argb_config,
-                                               EGL_NO_CONTEXT, NULL);
-
-  if (config->egl_argb_context == EGL_NO_CONTEXT)
-    {
-      error = g_error_new (mech_surface_egl_error_quark (), 0,
-                           "Could not create an EGL context");
-      goto init_failed;
-    }
-
-  if (eglMakeCurrent (config->egl_display, EGL_NO_SURFACE,
-                      EGL_NO_SURFACE, config->egl_argb_context) == EGL_FALSE)
-    {
-      error = g_error_new (mech_surface_egl_error_quark (), 0,
-                           "Could not make EGL context current");
-      goto init_failed;
-    }
-
-  config->argb_device = cairo_egl_device_create (config->egl_display,
-                                                 config->egl_argb_context);
-
-  if (cairo_device_status (config->argb_device) != CAIRO_STATUS_SUCCESS)
-    {
-      error = g_error_new (mech_surface_egl_error_quark (), 0,
-                           "Could not create a cairo EGL device");
-      goto init_failed;
-    }
-
-  extensions = eglQueryString (config->egl_display, EGL_EXTENSIONS);
-
-  if (strstr (extensions, "EGL_EXT_buffer_age"))
-    config->has_buffer_age_ext = TRUE;
-
-  if (strstr (extensions, "EGL_EXT_swap_buffers_with_damage"))
-    config->has_swap_buffers_with_damage_ext = TRUE;
-
-  return config;
-
- init_failed:
-  if (config->egl_argb_context != EGL_NO_CONTEXT)
-    eglDestroyContext (config->egl_display, config->egl_argb_context);
-
-  if (config->argb_device)
-    cairo_device_destroy (config->argb_device);
-
-  config->error = error;
-
-  return config;
-}
-
-static MechGLConfig *
-_get_gl_config (void)
-{
-  static MechGLConfig *gl_config = NULL;
-
-  if (g_once_init_enter (&gl_config))
-    {
-      MechGLConfig *config;
-
-      config = _create_gl_config ();
-      g_once_init_leave (&gl_config, config);
-    }
-
-  return gl_config;
-}
-
 static gboolean
 mech_surface_wayland_egl_initable_init (GInitable     *initable,
                                         GCancellable  *cancellable,
                                         GError       **error)
 {
   MechSurfaceWaylandEGL *surface_egl = (MechSurfaceWaylandEGL *) initable;
-  MechGLConfig *config;
+  GError *config_error = NULL;
+  MechEGLConfig *config;
 
   if (cancellable)
     {
@@ -189,16 +63,15 @@ mech_surface_wayland_egl_initable_init (GInitable     *initable,
       return FALSE;
     }
 
-  config = _get_gl_config ();
+  config = _mech_egl_config_get (EGL_OPENGL_BIT, &config_error);
 
-  if (config->error)
+  if (config_error)
     {
-      if (error)
-        *error = g_error_copy (config->error);
+      g_propagate_error (error, config_error);
       return FALSE;
     }
 
-  surface_egl->_priv->gl_config = config;
+  surface_egl->_priv->egl_config = config;
   return TRUE;
 }
 
@@ -221,7 +94,7 @@ mech_surface_wayland_egl_finalize (GObject *object)
     wl_egl_window_destroy (priv->wl_egl_window);
 
   if (priv->egl_surface)
-    eglDestroySurface (priv->gl_config->egl_display,
+    eglDestroySurface (priv->egl_config->egl_display,
                        priv->egl_surface);
 
   G_OBJECT_CLASS (mech_surface_wayland_egl_parent_class)->finalize (object);
@@ -238,14 +111,14 @@ mech_surface_wayland_egl_acquire (MechSurface *surface)
     {
       surface_device = cairo_surface_get_device (priv->surface);
 
-      if (surface_device != priv->gl_config->argb_device ||
+      if (surface_device != priv->egl_config->argb_device ||
           cairo_device_status (surface_device) != CAIRO_STATUS_SUCCESS)
         return FALSE;
     }
 
-  cairo_device_acquire (priv->gl_config->argb_device);
+  cairo_device_acquire (priv->egl_config->argb_device);
 
-  return cairo_device_status (priv->gl_config->argb_device) == CAIRO_STATUS_SUCCESS;
+  return cairo_device_status (priv->egl_config->argb_device) == CAIRO_STATUS_SUCCESS;
 }
 
 static void
@@ -259,12 +132,12 @@ mech_surface_wayland_egl_release (MechSurface *surface)
     {
       surface_device = cairo_surface_get_device (priv->surface);
 
-      if (surface_device != priv->gl_config->argb_device ||
+      if (surface_device != priv->egl_config->argb_device ||
           cairo_device_status (surface_device) != CAIRO_STATUS_SUCCESS)
         return;
     }
 
-  cairo_device_release (priv->gl_config->argb_device);
+  cairo_device_release (priv->egl_config->argb_device);
   priv->cached_age = -1;
 }
 
@@ -292,11 +165,11 @@ mech_surface_wayland_egl_set_size (MechSurface *surface,
       priv->wl_egl_window = wl_egl_window_create (wl_surface, width, height);
 
       priv->egl_surface =
-        eglCreateWindowSurface (priv->gl_config->egl_display,
-                                priv->gl_config->egl_argb_config,
+        eglCreateWindowSurface (priv->egl_config->egl_display,
+                                priv->egl_config->egl_argb_config,
                                 priv->wl_egl_window, NULL);
       priv->surface =
-        cairo_gl_surface_create_for_egl (priv->gl_config->argb_device,
+        cairo_gl_surface_create_for_egl (priv->egl_config->argb_device,
                                          priv->egl_surface,
                                          width, height);
     }
@@ -319,10 +192,10 @@ mech_surface_wayland_egl_get_age (MechSurface *surface)
     {
       EGLint buffer_age = 0;
 
-      if (priv->gl_config &&
+      if (priv->egl_config &&
           priv->egl_surface &&
-          priv->gl_config->has_buffer_age_ext)
-        eglQuerySurface(priv->gl_config->egl_display,
+          priv->egl_config->has_buffer_age_ext)
+        eglQuerySurface(priv->egl_config->egl_display,
                         priv->egl_surface,
                         EGL_BUFFER_AGE_EXT, &buffer_age);
 
@@ -351,7 +224,7 @@ mech_surface_wayland_egl_damage (MechSurfaceWayland   *surface,
   MechSurfaceWaylandEGL *surface_egl = (MechSurfaceWaylandEGL *) surface;
   MechSurfaceWaylandEGLPriv *priv = surface_egl->_priv;
 
-  if (priv->gl_config->has_swap_buffers_with_damage_ext &&
+  if (priv->egl_config->has_swap_buffers_with_damage_ext &&
       region && !cairo_region_is_empty (region))
     {
       cairo_rectangle_int_t region_rect;
@@ -371,7 +244,7 @@ mech_surface_wayland_egl_damage (MechSurfaceWayland   *surface,
           rects[i * 4 + 3] = region_rect.height;
         }
 
-      eglSwapBuffersWithDamageEXT (priv->gl_config->egl_display,
+      eglSwapBuffersWithDamageEXT (priv->egl_config->egl_display,
                                    priv->egl_surface, rects, n_rects);
 
       for (i = 0; i < n_rects; i++)
