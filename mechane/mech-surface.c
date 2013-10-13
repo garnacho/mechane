@@ -268,26 +268,29 @@ _calculate_cache_size (MechSurface *surface,
 {
   cairo_rectangle_t allocation;
   MechSurfacePrivate *priv;
+  gint extra_pixels = 0;
 
   priv = mech_surface_get_instance_private (surface);
   mech_area_get_allocated_size (priv->area, &allocation);
-  allocation.x = allocation.y = 0;
+
+  if (priv->surface_type == MECH_SURFACE_TYPE_OFFSCREEN)
+    extra_pixels = EXTRA_PIXELS;
 
   if (!_mech_area_get_node (priv->area)->parent)
     {
       if (width)
-        *width = CLAMP (priv->width + (2 * EXTRA_PIXELS),
+        *width = CLAMP (priv->width + (2 * extra_pixels),
                         1, allocation.width * priv->scale_x);
       if (height)
-        *height = CLAMP (priv->height + (2 * EXTRA_PIXELS),
+        *height = CLAMP (priv->height + (2 * extra_pixels),
                          1, allocation.height * priv->scale_y);
     }
   else
     {
       if (width)
-        *width = MAX (1, priv->width + (2 * EXTRA_PIXELS));
+        *width = MAX (1, priv->width + (2 * extra_pixels));
       if (height)
-        *height = MAX (1, priv->height + (2 * EXTRA_PIXELS));
+        *height = MAX (1, priv->height + (2 * extra_pixels));
     }
 }
 
@@ -442,7 +445,7 @@ _mech_surface_update_cached_rect (MechSurface       *surface,
                                   gdouble           *dy)
 {
   cairo_rectangle_t new_surface_rect, allocation;
-  gint cache_width, cache_height;
+  gint cache_width, cache_height, extra_pixels = 0;
   MechSurfacePrivate *priv;
 
   priv = mech_surface_get_instance_private (surface);
@@ -454,6 +457,9 @@ _mech_surface_update_cached_rect (MechSurface       *surface,
   if (dy)
     *dy = 0;
 
+  if (priv->surface_type == MECH_SURFACE_TYPE_OFFSCREEN)
+    extra_pixels = EXTRA_PIXELS;
+
   if (!_mech_area_get_node (priv->area)->parent)
     {
       new_surface_rect.width =
@@ -461,18 +467,18 @@ _mech_surface_update_cached_rect (MechSurface       *surface,
       new_surface_rect.height =
         MIN ((gdouble) cache_height / priv->scale_y, allocation.height);
       new_surface_rect.x =
-        CLAMP (viewport->x - (EXTRA_PIXELS / priv->scale_x),
+        CLAMP (viewport->x - (extra_pixels / priv->scale_x),
                0, MAX (allocation.width - new_surface_rect.width, 0));
       new_surface_rect.y =
-        CLAMP (viewport->y - (EXTRA_PIXELS / priv->scale_y),
+        CLAMP (viewport->y - (extra_pixels / priv->scale_y),
                0, MAX (allocation.height - new_surface_rect.height, 0));
     }
   else
     {
       new_surface_rect.width = (gdouble) cache_width / priv->scale_x;
       new_surface_rect.height = (gdouble) cache_height / priv->scale_y;
-      new_surface_rect.x = viewport->x - (EXTRA_PIXELS / priv->scale_x);
-      new_surface_rect.y = viewport->y - (EXTRA_PIXELS / priv->scale_y);
+      new_surface_rect.x = viewport->x - (extra_pixels / priv->scale_x);
+      new_surface_rect.y = viewport->y - (extra_pixels / priv->scale_y);
     }
 
   if (new_surface_rect.x == priv->cached_rect.x &&
