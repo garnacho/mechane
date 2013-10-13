@@ -147,6 +147,32 @@ mech_event_set_area (MechEvent *event,
   event->any.area = area;
 }
 
+MechArea *
+mech_event_get_target (MechEvent *event)
+{
+  g_return_val_if_fail (event != NULL, NULL);
+  g_return_val_if_fail (IS_EVENT_TYPE (event->type), NULL);
+
+  return event->any.target;
+}
+
+void
+mech_event_set_target (MechEvent *event,
+                       MechArea  *target)
+{
+  g_return_if_fail (event != NULL);
+  g_return_if_fail (IS_EVENT_TYPE (event->type));
+  g_return_if_fail (MECH_IS_AREA (target));
+
+  if (target)
+    g_object_ref (target);
+
+  if (event->any.target)
+    g_object_unref (event->any.target);
+
+  event->any.target = target;
+}
+
 MechSeat *
 mech_event_get_seat (MechEvent *event)
 {

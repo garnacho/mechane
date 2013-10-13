@@ -131,6 +131,10 @@ MechArea  * mech_event_get_area            (MechEvent      *event);
 void        mech_event_set_area            (MechEvent      *event,
                                             MechArea       *area);
 
+MechArea *  mech_event_get_target          (MechEvent      *event);
+void        mech_event_set_target          (MechEvent      *event,
+                                            MechArea       *target);
+
 MechSeat  * mech_event_get_seat            (MechEvent      *event);
 void        mech_event_set_seat            (MechEvent      *event,
                                             MechSeat       *seat);

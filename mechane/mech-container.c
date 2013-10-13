@@ -442,8 +442,8 @@ _mech_container_propagate_event (MechContainer *container,
     {
       area = g_ptr_array_index (areas, i);
       area_event = mech_event_translate (event, area);
-      area_event->any.target =
-        g_object_ref (g_ptr_array_index (areas, areas->len - 1));
+      mech_event_set_target (area_event,
+                             g_ptr_array_index (areas, areas->len - 1));
       area_event->any.flags |= MECH_EVENT_FLAG_CAPTURE_PHASE;
       handled = _mech_area_handle_event (area, area_event);
       mech_event_free (area_event);
@@ -459,8 +459,8 @@ _mech_container_propagate_event (MechContainer *container,
     {
       area = g_ptr_array_index (areas, i);
       area_event = mech_event_translate (event, area);
-      area_event->any.target =
-        g_object_ref (g_ptr_array_index (areas, areas->len - 1));
+      mech_event_set_target (area_event,
+                             g_ptr_array_index (areas, areas->len - 1));
       handled |= _mech_area_handle_event (area, area_event);
       mech_event_free (area_event);
       i--;
