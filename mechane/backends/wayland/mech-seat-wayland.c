@@ -186,7 +186,7 @@ _seat_pointer_leave (gpointer           data,
   MechSeatWaylandPriv *priv = ((MechSeatWayland *) data)->_priv;
   MechEvent event = { 0 };
 
-  event.type = MECH_ENTER;
+  event.type = MECH_LEAVE;
   event.any.seat = data;
   event.any.serial = serial;
   mech_container_handle_event ((MechContainer *) priv->pointer_window, &event);
