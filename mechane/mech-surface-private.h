@@ -55,6 +55,9 @@ struct _MechSurfaceClass
 
   void              (* push_update) (MechSurface          *surface,
                                      const cairo_region_t *region);
+
+  void              (* render)      (MechSurface *surface,
+                                     cairo_t     *cr);
 };
 
 GType            mech_surface_get_type          (void) G_GNUC_CONST;
@@ -70,8 +73,8 @@ void             _mech_surface_get_size         (MechSurface       *surface,
 
 cairo_t        * _mech_surface_cairo_create     (MechSurface       *surface);
 
-void             _mech_surface_set_source       (cairo_t           *cr,
-                                                 MechSurface       *surface);
+void             _mech_surface_render           (MechSurface       *surface,
+                                                 cairo_t           *cr);
 
 gboolean         _mech_surface_acquire          (MechSurface       *surface);
 void             _mech_surface_release          (MechSurface       *surface);

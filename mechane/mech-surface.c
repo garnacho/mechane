@@ -76,6 +76,30 @@ mech_surface_get_age_impl (MechSurface *surface)
 }
 
 static void
+mech_surface_render_impl (MechSurface *surface,
+                          cairo_t     *cr)
+{
+  cairo_surface_t *cairo_surface;
+  cairo_pattern_t *pattern;
+  MechSurfacePrivate *priv;
+  cairo_matrix_t matrix;
+
+  priv = mech_surface_get_instance_private (surface);
+  cairo_surface = MECH_SURFACE_GET_CLASS (surface)->get_surface (surface);
+  g_assert (cairo_surface != NULL);
+
+  cairo_set_source_surface (cr, cairo_surface, 0, 0);
+  pattern = cairo_get_source (cr);
+  cairo_pattern_get_matrix (pattern, &matrix);
+
+  cairo_matrix_scale (&matrix, priv->scale_x, priv->scale_y);
+  cairo_matrix_translate (&matrix, -priv->cached_rect.x,
+                          -priv->cached_rect.y);
+  cairo_pattern_set_matrix (pattern, &matrix);
+  cairo_paint (cr);
+}
+
+static void
 mech_surface_get_property (GObject    *object,
                            guint       prop_id,
                            GValue     *value,
@@ -134,6 +158,7 @@ mech_surface_class_init (MechSurfaceClass *klass)
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
   klass->get_age = mech_surface_get_age_impl;
+  klass->render = mech_surface_render_impl;
 
   object_class->get_property = mech_surface_get_property;
   object_class->set_property = mech_surface_set_property;
@@ -607,29 +632,6 @@ _mech_surface_cairo_create (MechSurface *surface)
   return cr;
 }
 
-void
-_mech_surface_set_source (cairo_t     *cr,
-                          MechSurface *surface)
-{
-  cairo_surface_t *cairo_surface;
-  cairo_pattern_t *pattern;
-  MechSurfacePrivate *priv;
-  cairo_matrix_t matrix;
-
-  priv = mech_surface_get_instance_private (surface);
-  cairo_surface = MECH_SURFACE_GET_CLASS (surface)->get_surface (surface);
-  g_assert (cairo_surface != NULL);
-
-  cairo_set_source_surface (cr, cairo_surface, 0, 0);
-  pattern = cairo_get_source (cr);
-  cairo_pattern_get_matrix (pattern, &matrix);
-
-  cairo_matrix_scale (&matrix, priv->scale_x, priv->scale_y);
-  cairo_matrix_translate (&matrix, -priv->cached_rect.x,
-                          -priv->cached_rect.y);
-  cairo_pattern_set_matrix (pattern, &matrix);
-}
-
 MechSurface *
 _mech_surface_new (MechArea *area)
 {
@@ -882,4 +884,14 @@ _mech_surface_area_is_rendered (MechSurface       *surface,
     }
 
   return x2 > x1 && y2 > y1;
+}
+
+void
+_mech_surface_render (MechSurface *surface,
+                      cairo_t     *cr)
+{
+  g_return_if_fail (MECH_IS_SURFACE (surface));
+  g_return_if_fail (cr != NULL);
+
+  MECH_SURFACE_GET_CLASS (surface)->render (surface, cr);
 }

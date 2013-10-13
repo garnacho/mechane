@@ -423,16 +423,6 @@ render_stage_leave (MechStage          *stage,
 
   target = render_stage_context_lookup_target (context);
 
-  if (target->offscreen->area == area && !G_NODE_IS_ROOT (node))
-    {
-      OffscreenNode *offscreen;
-
-      offscreen = render_stage_context_pop_target (context);
-      target = render_stage_context_lookup_target (context);
-      _mech_surface_set_source (target->cr, offscreen->node.data);
-      cairo_paint (target->cr);
-    }
-
   if (render_stage_context_area_overlaps_clip (context, stage, area))
     {
       MechRenderer *renderer;
@@ -446,6 +436,15 @@ render_stage_leave (MechStage          *stage,
                                    border.left, border.top,
                                    rect.width - (border.left + border.right),
                                    rect.height - (border.top + border.bottom));
+    }
+
+  if (target->offscreen->area == area && !G_NODE_IS_ROOT (node))
+    {
+      OffscreenNode *offscreen;
+
+      offscreen = render_stage_context_pop_target (context);
+      target = render_stage_context_lookup_target (context);
+      _mech_surface_render (offscreen->node.data, target->cr);
     }
 
   cairo_restore (target->cr);
