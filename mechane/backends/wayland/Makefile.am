@@ -9,6 +9,7 @@ mech_wayland_sources =			\
 	mech-surface-wayland.c		\
 	mech-surface-wayland-egl.c	\
 	mech-surface-wayland-shm.c	\
+	mech-surface-wayland-texture.c	\
 	mech-window-wayland.c
 
 AM_CPPFLAGS = $(CFLAGS) $(MECH_DEPS_CFLAGS) $(MECH_WAYLAND_DEPS_CFLAGS) $(MECH_EGL_DEPS_CFLAGS)
