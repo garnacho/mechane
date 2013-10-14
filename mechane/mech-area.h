@@ -75,6 +75,9 @@ struct _MechAreaClass
   cairo_region_t * (* get_shape)          (MechArea  *area);
 
   void             (* visibility_changed) (MechArea  *area);
+
+  void             (* surface_reset)      (MechArea     *area,
+                                           const GError *error);
 };
 
 GType            mech_area_get_type             (void) G_GNUC_CONST;
@@ -197,6 +200,12 @@ cairo_region_t * mech_area_get_shape            (MechArea          *area);
 void             mech_area_set_cursor           (MechArea          *area,
                                                  MechCursor        *cursor);
 MechCursor     * mech_area_get_cursor           (MechArea          *area);
+
+void             mech_area_set_surface_type     (MechArea          *area,
+                                                 MechSurfaceType    type);
+MechSurfaceType  mech_area_get_surface_type     (MechArea          *area);
+MechSurfaceType  mech_area_get_effective_surface_type
+                                                (MechArea          *area);
 
 /* Interface delegates */
 void             mech_area_class_set_delegate    (MechAreaClass    *area_class,

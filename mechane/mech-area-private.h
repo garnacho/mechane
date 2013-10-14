@@ -40,6 +40,9 @@ void             _mech_area_guess_offscreen_size  (MechArea          *area,
                                                    gint              *height);
 void             _mech_area_get_stage_rect        (MechArea          *area,
                                                    cairo_rectangle_t *rect);
+void             _mech_area_reset_surface_type    (MechArea          *area,
+                                                   MechSurfaceType    surface_type);
+
 
 G_END_DECLS
 

@@ -62,6 +62,7 @@ enum {
   DRAW,
   HANDLE_EVENT,
   VISIBILITY_CHANGED,
+  SURFACE_RESET,
   LAST_SIGNAL
 };
 
@@ -98,6 +99,7 @@ struct _MechAreaPrivate
 
   guint evmask              : 16;
   guint state               : 9;
+  guint surface_type        : 3;
   guint clip                : 1;
   guint is_identity         : 1;
   guint visible             : 1;
@@ -501,6 +503,14 @@ mech_area_class_init (MechAreaClass *klass)
                   NULL, NULL,
                   g_cclosure_marshal_VOID__VOID,
                   G_TYPE_NONE, 0);
+  signals[SURFACE_RESET] =
+    g_signal_new ("surface-reset",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST,
+                  G_STRUCT_OFFSET (MechAreaClass, surface_reset),
+                  NULL, NULL,
+                  g_cclosure_marshal_VOID__BOXED,
+                  G_TYPE_NONE, 1, G_TYPE_ERROR | G_SIGNAL_TYPE_STATIC_SCOPE);
 
   quark_window = g_quark_from_static_string ("MECH_QUARK_WINDOW");
 }
@@ -2059,6 +2069,83 @@ mech_area_get_cursor (MechArea *area)
 
   priv = mech_area_get_instance_private (area);
   return priv->pointer_cursor;
+}
+
+void
+_mech_area_reset_surface_type (MechArea        *area,
+                               MechSurfaceType  surface_type)
+{
+  MechAreaPrivate *priv;
+
+  priv = mech_area_get_instance_private (area);
+
+  if (priv->surface_type == surface_type)
+    return;
+
+  priv->surface_type = surface_type;
+  g_signal_emit (area, signals[SURFACE_RESET], 0);
+}
+
+void
+mech_area_set_surface_type (MechArea        *area,
+                            MechSurfaceType  surface_type)
+{
+  MechAreaPrivate *priv;
+  MechStage *stage;
+
+  g_return_val_if_fail (MECH_IS_AREA (area), FALSE);
+  g_return_val_if_fail (surface_type >= MECH_SURFACE_TYPE_NONE &&
+                        surface_type <= MECH_SURFACE_TYPE_GL, FALSE);
+
+  priv = mech_area_get_instance_private (area);
+
+  if (priv->surface_type == surface_type)
+    return;
+
+  priv->surface_type = surface_type;
+  stage = _mech_area_get_stage (area);
+
+  if (stage)
+    {
+      _mech_stage_check_update_surface (stage, area);
+      _mech_stage_invalidate (stage, area, NULL, FALSE);
+    }
+}
+
+MechSurfaceType
+mech_area_get_surface_type (MechArea *area)
+{
+  MechAreaPrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_AREA (area), MECH_SURFACE_TYPE_NONE);
+
+  priv = mech_area_get_instance_private (area);
+  return priv->surface_type;
+}
+
+MechSurfaceType
+mech_area_get_effective_surface_type (MechArea *area)
+{
+  GNode *node;
+
+  g_return_val_if_fail (MECH_IS_AREA (area), MECH_SURFACE_TYPE_NONE);
+
+  node = _mech_area_get_node (area);
+
+  while (node)
+    {
+      MechSurfaceType type;
+
+      type = mech_area_get_surface_type (node->data);
+
+      if (type != MECH_SURFACE_TYPE_NONE &&
+          type != MECH_SURFACE_TYPE_OFFSCREEN)
+        return type;
+
+      node = node->parent;
+    }
+
+  return MECH_SURFACE_TYPE_NONE;
 }
 
 /* Interface delegates */

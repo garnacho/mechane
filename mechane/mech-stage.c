@@ -234,6 +234,7 @@ _mech_stage_destroy_offscreen_node (OffscreenNode *offscreen,
     }
 
   g_object_set_qdata ((GObject *) offscreen->area, quark_area_offscreen, NULL);
+  _mech_surface_set_parent (offscreen->node.data, NULL);
   g_object_unref (offscreen->node.data);
   g_node_unlink ((GNode *) offscreen);
 }
@@ -270,7 +271,7 @@ _mech_stage_check_update_surface (MechStage *stage,
 
   offscreen = _area_peek_offscreen (area);
 
-  requested_type = MECH_SURFACE_TYPE_NONE;
+  requested_type = mech_area_get_surface_type (area);
   surface_type = (offscreen && offscreen->node.data) ?
     _mech_surface_get_surface_type (offscreen->node.data) :
     MECH_SURFACE_TYPE_NONE;
@@ -285,6 +286,7 @@ _mech_stage_check_update_surface (MechStage *stage,
       /* Disallow root surfaces being set this way,
        * preferred method is changing a window renderer.
        */
+      _mech_area_reset_surface_type (area, MECH_SURFACE_TYPE_NONE);
       return;
     }
   else if (offscreen && requested_type == MECH_SURFACE_TYPE_NONE)
@@ -304,6 +306,7 @@ _mech_stage_check_update_surface (MechStage *stage,
     {
       /* Initialization of surface failed, not one that can be honored */
       _mech_stage_destroy_offscreen_node (offscreen, FALSE);
+      _mech_area_reset_surface_type (area, MECH_SURFACE_TYPE_NONE);
       g_object_unref (surface);
     }
   else
