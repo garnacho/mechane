@@ -211,7 +211,7 @@ static void
 _mech_stage_destroy_offscreen_node (OffscreenNode *offscreen,
                                     gboolean       recurse)
 {
-  GNode *child;
+  GNode *child, *next;
 
   if (!recurse && offscreen->node.parent)
     {
@@ -223,8 +223,14 @@ _mech_stage_destroy_offscreen_node (OffscreenNode *offscreen,
     }
   else if (recurse)
     {
-      for (child = offscreen->node.children; child; child = child->next)
-        _mech_stage_destroy_offscreen_node ((OffscreenNode *) child, recurse);
+      child = offscreen->node.children;
+
+      while (child)
+        {
+          next = child->next;
+          _mech_stage_destroy_offscreen_node ((OffscreenNode *) child, recurse);
+          child = next;
+        }
     }
 
   g_object_set_qdata ((GObject *) offscreen->area, quark_area_offscreen, NULL);
