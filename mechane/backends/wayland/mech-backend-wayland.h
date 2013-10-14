@@ -21,6 +21,7 @@
 #include <wayland-client.h>
 #include <wayland-cursor.h>
 #include <mechane/mech-backend-private.h>
+#include "subsurface-client-protocol.h"
 
 G_BEGIN_DECLS
 
@@ -45,6 +46,7 @@ struct _MechBackendWayland
   struct wl_shm *wl_shm;
   struct wl_shell *wl_shell;
   struct wl_cursor_theme *wl_cursor_theme;
+  struct wl_subcompositor *wl_subcompositor;
 };
 
 struct _MechBackendWaylandClass

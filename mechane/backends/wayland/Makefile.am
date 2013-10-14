@@ -1,4 +1,5 @@
 mech_wayland_sources =			\
+	subsurface-protocol.c		\
 	mech-backend-wayland.c		\
 	mech-clock-wayland.c		\
 	mech-cursor-wayland.c		\

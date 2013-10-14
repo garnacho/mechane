@@ -125,6 +125,9 @@ _backend_registry_handle_global (gpointer            user_data,
       _mech_monitor_layout_add (layout, monitor);
       g_hash_table_insert (backend->_priv->outputs, wl_output, monitor);
     }
+  else if (strcmp (interface, "wl_subcompositor") == 0)
+    backend->wl_subcompositor =
+      wl_registry_bind (registry, id, &wl_subcompositor_interface, 1);
 }
 
 static void
