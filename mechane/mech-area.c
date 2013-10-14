@@ -1213,7 +1213,7 @@ _mech_area_guess_offscreen_size (MechArea *area,
   GNode *clipping_node;
 
   priv = mech_area_get_instance_private (area);
-  clipping_node = priv->node->parent;
+  clipping_node = priv->node;
 
   while (clipping_node->parent &&
          !mech_area_get_clip (clipping_node->data))
