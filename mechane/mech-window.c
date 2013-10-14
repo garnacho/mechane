@@ -51,8 +51,9 @@ struct _MechWindowPrivate
   GArray *state;
   gchar *title;
 
-  guint resizable : 1;
-  guint visible   : 1;
+  guint resizable     : 1;
+  guint visible       : 1;
+  guint renderer_type : 2;
 };
 
 enum {
@@ -66,7 +67,8 @@ enum {
   PROP_VISIBLE,
   PROP_MONITOR,
   PROP_STATE,
-  PROP_STYLE
+  PROP_STYLE,
+  PROP_RENDERER_TYPE
 };
 
 static guint signals[LAST_SIGNAL] = { 0 };
@@ -105,6 +107,9 @@ mech_window_get_property (GObject    *object,
     case PROP_STYLE:
       g_value_set_object (value, priv->style);
       break;
+    case PROP_RENDERER_TYPE:
+      g_value_set_enum (value, priv->renderer_type);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, param_id, pspec);
     }
@@ -132,9 +137,20 @@ mech_window_set_property (GObject      *object,
     case PROP_STYLE:
       mech_window_set_style (window, g_value_get_object (value));
       break;
+    case PROP_RENDERER_TYPE:
+      mech_window_set_renderer_type (window, g_value_get_enum (value), NULL);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, param_id, pspec);
     }
+}
+
+static void
+mech_window_constructed (GObject *object)
+{
+  G_OBJECT_CLASS (mech_window_parent_class)->constructed (object);
+  mech_window_set_renderer_type ((MechWindow *) object,
+                                 MECH_RENDERER_TYPE_SOFTWARE, NULL);
 }
 
 static void
@@ -242,6 +258,7 @@ mech_window_class_init (MechWindowClass *klass)
 
   object_class->get_property = mech_window_get_property;
   object_class->set_property = mech_window_set_property;
+  object_class->constructed = mech_window_constructed;
   object_class->finalize = mech_window_finalize;
 
   container_class->draw = mech_window_draw;
@@ -307,6 +324,15 @@ mech_window_class_init (MechWindowClass *klass)
                                                         MECH_TYPE_STYLE,
                                                         G_PARAM_READWRITE |
                                                         G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (object_class,
+                                   PROP_RENDERER_TYPE,
+                                   g_param_spec_enum ("renderer-type",
+                                                      "Renderer type",
+                                                      "Type of renderer drawing window contents",
+                                                      MECH_TYPE_RENDERER_TYPE,
+                                                      MECH_RENDERER_TYPE_SOFTWARE,
+                                                      G_PARAM_READWRITE |
+                                                      G_PARAM_STATIC_STRINGS));
 }
 
 static MechStyle *
@@ -649,4 +675,69 @@ mech_window_get_style (MechWindow *window)
 
   priv = mech_window_get_instance_private (window);
   return priv->style;
+}
+
+gboolean
+mech_window_set_renderer_type (MechWindow        *window,
+                               MechRendererType   renderer_type,
+                               GError           **error)
+{
+  MechSurfaceType surface_type;
+  MechWindowPrivate *priv;
+  gboolean retval = TRUE;
+  MechSurface *surface;
+
+  g_return_val_if_fail (MECH_IS_WINDOW (window), FALSE);
+  g_return_val_if_fail (surface_type != MECH_RENDERER_TYPE_SOFTWARE ||
+                        surface_type != MECH_RENDERER_TYPE_GL, FALSE);
+  g_return_val_if_fail (!error || !*error, FALSE);
+
+  priv = mech_window_get_instance_private (window);
+
+  if (priv->renderer_type == renderer_type &&
+      _mech_container_get_surface ((MechContainer *) window))
+    return TRUE;
+
+  if (renderer_type == MECH_RENDERER_TYPE_SOFTWARE)
+    surface_type = MECH_SURFACE_TYPE_SOFTWARE;
+  else if (renderer_type == MECH_RENDERER_TYPE_GL)
+    surface_type = MECH_SURFACE_TYPE_GL;
+  else
+    g_assert_not_reached ();
+
+  surface = _mech_surface_new (NULL, NULL, surface_type);
+  retval = g_initable_init (G_INITABLE (surface), NULL, error);
+
+  if (!retval)
+    {
+      g_object_unref (surface);
+      surface = _mech_surface_new (NULL, NULL, MECH_SURFACE_TYPE_SOFTWARE);
+
+      /* This should really always succeed */
+      if (!g_initable_init (G_INITABLE (surface), NULL, NULL))
+        g_assert_not_reached ();
+    }
+
+  _mech_container_set_surface ((MechContainer *) window, surface);
+  renderer_type = _mech_surface_get_renderer_type (surface);
+  g_object_unref (surface);
+
+  if (priv->renderer_type != renderer_type)
+    {
+      priv->renderer_type = renderer_type;
+      g_object_notify ((GObject *) window, "renderer-type");
+    }
+
+  return retval;
+}
+
+MechRendererType
+mech_window_get_renderer_type (MechWindow *window)
+{
+  MechWindowPrivate *priv;
+
+  g_return_val_if_fail (MECH_IS_WINDOW (window), MECH_RENDERER_TYPE_SOFTWARE);
+
+  priv = mech_window_get_instance_private (window);
+  return priv->renderer_type;
 }

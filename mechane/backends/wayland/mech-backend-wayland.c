@@ -57,9 +57,11 @@ _mech_backend_wayland_create_window (MechBackend *backend)
 }
 
 static MechSurface *
-_mech_backend_wayland_create_surface (MechBackend *backend)
+_mech_backend_wayland_create_surface (MechBackend     *backend,
+                                      MechSurface     *parent,
+                                      MechSurfaceType  surface_type)
 {
-  return _mech_surface_wayland_new (MECH_BACKING_SURFACE_TYPE_SHM, NULL);
+  return _mech_surface_wayland_new (surface_type, parent);
 }
 
 static MechCursor *

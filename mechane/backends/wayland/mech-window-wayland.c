@@ -16,6 +16,7 @@
  */
 
 #include <cairo/cairo-xlib.h>
+#include <mechane/mech-container-private.h>
 #include <mechane/mech-window-private.h>
 #include "mech-window-wayland.h"
 #include "mech-surface-wayland.h"
@@ -28,7 +29,6 @@ struct _MechWindowWaylandPriv
   struct wl_shell *wl_shell;
   struct wl_surface *wl_surface;
   struct wl_shell_surface *wl_shell_surface;
-  MechSurface *surface;
   GSList *outputs;
 };
 
@@ -94,7 +94,6 @@ mech_window_wayland_finalize (GObject *object)
 {
   MechWindowWaylandPriv *priv = ((MechWindowWayland *) object)->_priv;
 
-  wl_surface_destroy (priv->wl_surface);
   wl_shell_surface_destroy (priv->wl_shell_surface);
 
   G_OBJECT_CLASS (mech_window_wayland_parent_class)->finalize (object);
@@ -166,6 +165,7 @@ _window_shell_surface_configure (gpointer                 data,
   gint prev_width, prev_height;
   MechWindowWaylandPriv *priv;
   MechWindow *window = data;
+  MechSurface *surface;
   gint tx, ty;
 
   priv = ((MechWindowWayland *) window)->_priv;
@@ -186,7 +186,8 @@ _window_shell_surface_configure (gpointer                 data,
       edges == WL_SHELL_SURFACE_RESIZE_TOP_RIGHT)
     ty = prev_height - height;
 
-  _mech_surface_wayland_translate ((MechSurfaceWayland *) priv->surface,
+  surface = _mech_container_get_surface ((MechContainer *) window);
+  _mech_surface_wayland_translate ((MechSurfaceWayland *) surface,
                                    tx, ty);
 }
 
@@ -203,15 +204,25 @@ static const struct wl_shell_surface_listener shell_surface_listener_funcs = {
 };
 
 static void
-mech_window_wayland_constructed (GObject *object)
+_mech_window_update_surface (MechWindowWayland *window)
 {
-  MechWindowWayland *window = (MechWindowWayland *) object;
   MechWindowWaylandPriv *priv = window->_priv;
+  struct wl_surface *wl_surface;
+  MechSurface *surface;
   MechClock *clock;
 
-  priv->wl_surface = wl_compositor_create_surface (priv->wl_compositor);
-  wl_surface_add_listener (priv->wl_surface, &surface_listener_funcs, window);
+  surface = _mech_container_get_surface ((MechContainer *) window);
+  g_assert (surface != NULL);
+  g_object_get (surface, "wl-surface", &wl_surface, NULL);
 
+  if (priv->wl_surface == wl_surface)
+    return;
+
+  if (priv->wl_shell_surface)
+    wl_shell_surface_destroy (priv->wl_shell_surface);
+
+  wl_surface_add_listener (wl_surface, &surface_listener_funcs, window);
+  priv->wl_surface = wl_surface;
   priv->wl_shell_surface = wl_shell_get_shell_surface (priv->wl_shell,
                                                        priv->wl_surface);
   wl_shell_surface_add_listener (priv->wl_shell_surface,
@@ -220,9 +231,23 @@ mech_window_wayland_constructed (GObject *object)
   wl_shell_surface_set_toplevel (priv->wl_shell_surface);
 
   clock = _mech_clock_wayland_new (window, priv->wl_surface);
-  _mech_window_set_clock ((MechWindow *) object, clock);
+  _mech_window_set_clock ((MechWindow *) window, clock);
+  g_object_unref (clock);
+}
 
+static void
+mech_window_wayland_constructed (GObject *object)
+{
   G_OBJECT_CLASS (mech_window_wayland_parent_class)->constructed (object);
+  _mech_window_update_surface ((MechWindowWayland *) object);
+}
+
+static void
+mech_window_wayland_notify (GObject    *object,
+                            GParamSpec *pspec)
+{
+  if (strcmp (pspec->name, "renderer-type") == 0)
+    _mech_window_update_surface ((MechWindowWayland *) object);
 }
 
 static void
@@ -232,16 +257,9 @@ mech_window_wayland_set_visible (MechWindow *window,
   MechWindowWayland *window_wayland = (MechWindowWayland *) window;
   MechWindowWaylandPriv *priv = window_wayland->_priv;
 
-  if (visible)
+  if (!visible)
     {
-      if (!priv->surface)
-        priv->surface = _mech_surface_wayland_new (MECH_BACKING_SURFACE_TYPE_EGL,
-                                                   priv->wl_surface);
-      _mech_container_set_surface ((MechContainer *) window, priv->surface);
-    }
-  else
-    {
-      wl_surface_attach (priv->wl_surface, NULL, 0 , 0);
+      wl_surface_attach (priv->wl_surface, NULL, 0, 0);
       wl_surface_commit (priv->wl_surface);
     }
 }
@@ -353,6 +371,7 @@ mech_window_wayland_class_init (MechWindowWaylandClass *klass)
   object_class->get_property = mech_window_wayland_get_property;
   object_class->constructed = mech_window_wayland_constructed;
   object_class->finalize = mech_window_wayland_finalize;
+  object_class->notify = mech_window_wayland_notify;
 
   window_class->set_visible = mech_window_wayland_set_visible;
   window_class->set_title = mech_window_wayland_set_title;

@@ -96,6 +96,11 @@ void              mech_window_set_style     (MechWindow      *window,
                                              MechStyle       *style);
 MechStyle       * mech_window_get_style     (MechWindow      *window);
 
+gboolean          mech_window_set_renderer_type (MechWindow        *window,
+                                                 MechRendererType   renderer_type,
+                                                 GError           **error);
+MechRendererType  mech_window_get_renderer_type (MechWindow        *window);
+
 G_END_DECLS
 
 #endif /* __MECH_WINDOW_H__ */

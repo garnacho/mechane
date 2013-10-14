@@ -76,7 +76,26 @@ struct _MechSurfacePrivate
   guint renderer_type : 2;
 };
 
-G_DEFINE_ABSTRACT_TYPE_WITH_PRIVATE (MechSurface, mech_surface, G_TYPE_OBJECT)
+static void mech_surface_initable_iface_init (GInitableIface *iface);
+
+G_DEFINE_ABSTRACT_TYPE_WITH_CODE (MechSurface, mech_surface, G_TYPE_OBJECT,
+                                  G_ADD_PRIVATE (MechSurface)
+                                  G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
+                                                         mech_surface_initable_iface_init))
+
+static gboolean
+mech_surface_initable_init (GInitable     *initable,
+                            GCancellable  *cancellable,
+                            GError       **error)
+{
+  return TRUE;
+}
+
+static void
+mech_surface_initable_iface_init (GInitableIface *iface)
+{
+  iface->init = mech_surface_initable_init;
+}
 
 static gint
 mech_surface_get_age_impl (MechSurface *surface)
@@ -719,13 +738,15 @@ _mech_surface_cairo_create (MechSurface *surface)
 }
 
 MechSurface *
-_mech_surface_new (MechArea *area)
+_mech_surface_new (MechArea        *area,
+                   MechSurface     *parent,
+                   MechSurfaceType  surface_type)
 {
   MechSurface *surface;
   MechBackend *backend;
 
   backend = mech_backend_get ();
-  surface = mech_backend_create_surface (backend);
+  surface = mech_backend_create_surface (backend, parent, surface_type);
   g_object_set (surface, "area", area, NULL);
 
   return surface;

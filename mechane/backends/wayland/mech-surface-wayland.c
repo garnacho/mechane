@@ -18,6 +18,7 @@
 #include "mech-surface-wayland.h"
 #include "mech-surface-wayland-shm.h"
 #include "mech-surface-wayland-egl.h"
+#include "mech-surface-wayland-texture.h"
 #include "mech-backend-wayland.h"
 
 G_DEFINE_ABSTRACT_TYPE (MechSurfaceWayland, mech_surface_wayland,
@@ -33,6 +34,25 @@ struct _MechSurfaceWaylandPriv
 };
 
 static void
+mech_surface_wayland_constructed (GObject *object)
+{
+  MechSurfaceWaylandPriv *priv = ((MechSurfaceWayland *) object)->_priv;
+  MechSurfaceType surface_type;
+
+  G_OBJECT_CLASS (mech_surface_wayland_parent_class)->constructed (object);
+
+  surface_type = _mech_surface_get_surface_type ((MechSurface *) object);
+
+  if (surface_type != MECH_SURFACE_TYPE_OFFSCREEN)
+    {
+      MechBackendWayland *backend;
+
+      backend = _mech_backend_wayland_get ();
+      priv->wl_surface = wl_compositor_create_surface (backend->wl_compositor);
+    }
+}
+
+static void
 mech_surface_wayland_set_property (GObject      *object,
                                    guint         prop_id,
                                    const GValue *value,
@@ -42,9 +62,6 @@ mech_surface_wayland_set_property (GObject      *object,
 
   switch (prop_id)
     {
-    case PROP_WL_SURFACE:
-      priv->wl_surface = g_value_get_pointer (value);
-      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
@@ -69,6 +86,19 @@ mech_surface_wayland_get_property (GObject    *object,
 }
 
 static void
+mech_surface_wayland_finalize (GObject *object)
+{
+  MechSurfaceWaylandPriv *priv;
+
+  priv = ((MechSurfaceWayland *) object)->_priv;
+
+  if (priv->wl_surface)
+    wl_surface_destroy (priv->wl_surface);
+
+  G_OBJECT_CLASS (mech_surface_wayland_parent_class)->finalize (object);
+}
+
+static void
 mech_surface_wayland_push_update (MechSurface          *surface,
                                   const cairo_region_t *region)
 {
@@ -86,8 +116,10 @@ mech_surface_wayland_class_init (MechSurfaceWaylandClass *klass)
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
   MechSurfaceClass *surface_class = MECH_SURFACE_CLASS (klass);
 
+  object_class->constructed = mech_surface_wayland_constructed;
   object_class->set_property = mech_surface_wayland_set_property;
   object_class->get_property = mech_surface_wayland_get_property;
+  object_class->finalize = mech_surface_wayland_finalize;
 
   surface_class->push_update = mech_surface_wayland_push_update;
 
@@ -96,9 +128,8 @@ mech_surface_wayland_class_init (MechSurfaceWaylandClass *klass)
                                    g_param_spec_pointer ("wl-surface",
                                                          "wl-surface",
                                                          "wl-surface",
-                                                         G_PARAM_READWRITE |
-                                                         G_PARAM_STATIC_STRINGS |
-                                                         G_PARAM_CONSTRUCT_ONLY));
+                                                         G_PARAM_READABLE |
+                                                         G_PARAM_STATIC_STRINGS));
 
   g_type_class_add_private (klass, sizeof (MechSurfaceWaylandPriv));
 }
@@ -112,50 +143,37 @@ mech_surface_wayland_init (MechSurfaceWayland *surface)
 }
 
 MechSurface *
-_mech_surface_wayland_new (MechBackingSurfaceType  type,
-                           struct wl_surface      *wl_surface)
+_mech_surface_wayland_new (MechSurfaceType  surface_type,
+                           MechSurface     *parent)
 {
   GType gtype = G_TYPE_NONE;
-  MechSurface *surface;
-  GError *error = NULL;
 
-  g_return_val_if_fail (type == MECH_BACKING_SURFACE_TYPE_EGL ||
-                        type == MECH_BACKING_SURFACE_TYPE_SHM, NULL);
+  g_assert (surface_type != MECH_SURFACE_TYPE_NONE);
 
-  if (type == MECH_BACKING_SURFACE_TYPE_SHM)
-    gtype = MECH_TYPE_SURFACE_WAYLAND_SHM;
-  else if (type == MECH_BACKING_SURFACE_TYPE_EGL)
+  if (surface_type == MECH_SURFACE_TYPE_GL)
     gtype = MECH_TYPE_SURFACE_WAYLAND_EGL;
-  else
-    return NULL;
-
-  surface = g_object_new (gtype,
-                          "wl-surface", wl_surface,
-                          NULL);
-
-  if (!G_IS_INITABLE (surface))
-    return surface;
-
-  if (!g_initable_init (G_INITABLE (surface), NULL, &error))
+  else if (surface_type == MECH_SURFACE_TYPE_SOFTWARE)
+    gtype = MECH_TYPE_SURFACE_WAYLAND_SHM;
+  else if (surface_type == MECH_SURFACE_TYPE_OFFSCREEN)
     {
-      if (gtype == MECH_TYPE_SURFACE_WAYLAND_EGL)
-        {
-          g_warning ("Could not create EGL surface, falling "
-                     "back to SHM ones. The error was: %s",
-                     error->message);
-          g_error_free (error);
+      g_assert (parent != NULL);
 
-          return _mech_surface_wayland_new (MECH_BACKING_SURFACE_TYPE_SHM,
-                                            wl_surface);
-        }
-
-      g_critical ("Could not a create a surface "
-                  "of type '%s', The error was: %s",
-                  g_type_name (gtype), error->message);
-      g_error_free (error);
+      /* Make an offscreen suitable to the parent renderer */
+      if (MECH_IS_SURFACE_WAYLAND_SHM (parent))
+        gtype = MECH_TYPE_SURFACE_WAYLAND_SHM;
+      else if (MECH_IS_SURFACE_WAYLAND_EGL (parent) ||
+               MECH_IS_SURFACE_WAYLAND_TEXTURE (parent))
+        gtype = MECH_TYPE_SURFACE_WAYLAND_TEXTURE;
+      else
+        g_assert_not_reached ();
     }
+  else
+    g_assert_not_reached ();
 
-  return surface;
+  return g_object_new (gtype,
+                       "surface-type", surface_type,
+                       "parent", parent,
+                       NULL);
 }
 
 void

@@ -18,6 +18,7 @@
 #include <math.h>
 #include <string.h>
 #include <cairo/cairo-gobject.h>
+#include <gio/gio.h>
 
 #include <mechane/mech-stage-private.h>
 #include <mechane/mech-area-private.h>
@@ -186,7 +187,6 @@ _mech_stage_create_offscreen_node (MechStage *stage,
   parent = _mech_stage_find_container_offscreen (stage, area);
 
   node = g_new0 (OffscreenNode, 1);
-  node->node.data = _mech_surface_new (area);
   node->area = area;
 
   /* Set all older child nodes below this new node */
@@ -232,31 +232,86 @@ _mech_stage_destroy_offscreen_node (OffscreenNode *offscreen,
   g_node_unlink ((GNode *) offscreen);
 }
 
-static OffscreenNode *
-_mech_stage_check_needs_offscreen (MechStage *stage,
-                                   MechArea  *area)
+static void
+_surface_check_children (OffscreenNode *offscreen,
+                         OffscreenNode *parent)
 {
+  GNode *node;
+
+  for (node = offscreen->node.children; node; node = node->next)
+    {
+      if (!node->data)
+        continue;
+
+      if (_mech_surface_set_parent (node->data, parent->node.data))
+        continue;
+
+      /* Unset surface, it will be rechecked when rendering iterates
+       * down there.
+       */
+      g_object_unref (node->data);
+      node->data = NULL;
+    }
+}
+
+void
+_mech_stage_check_update_surface (MechStage *stage,
+                                  MechArea  *area)
+{
+  MechSurfaceType requested_type, surface_type;
   OffscreenNode *offscreen;
+  MechSurface *surface;
 
   offscreen = _area_peek_offscreen (area);
 
-  if (mech_area_get_matrix (area, NULL))
-    {
-      if (!offscreen)
-        offscreen = _mech_stage_create_offscreen_node (stage, area);
-    }
-  else if (offscreen)
-    {
-      _mech_stage_destroy_offscreen_node (offscreen, FALSE);
-      offscreen = NULL;
-    }
+  requested_type = MECH_SURFACE_TYPE_NONE;
+  surface_type = (offscreen && offscreen->node.data) ?
+    _mech_surface_get_surface_type (offscreen->node.data) :
+    MECH_SURFACE_TYPE_NONE;
 
-  return offscreen;
+  if (mech_area_get_matrix (area, NULL))
+    requested_type = MECH_SURFACE_TYPE_OFFSCREEN;
+
+  if (surface_type == requested_type)
+    return;
+  else if (offscreen && !_mech_area_get_node (area)->parent)
+    {
+      /* Disallow root surfaces being set this way,
+       * preferred method is changing a window renderer.
+       */
+      return;
+    }
+  else if (offscreen && requested_type == MECH_SURFACE_TYPE_NONE)
+    {
+      _surface_check_children (offscreen, (OffscreenNode *) offscreen->node.parent);
+      _mech_stage_destroy_offscreen_node (offscreen, FALSE);
+      return;
+    }
+  else if (!offscreen && requested_type != MECH_SURFACE_TYPE_NONE)
+    offscreen = _mech_stage_create_offscreen_node (stage, area);
+
+  surface = _mech_surface_new (area, offscreen->node.parent->data,
+                               requested_type);
+
+  if (!g_initable_init ((GInitable *) surface, NULL, NULL) ||
+      !_mech_surface_set_parent (surface, offscreen->node.parent->data))
+    {
+      /* Initialization of surface failed, not one that can be honored */
+      _mech_stage_destroy_offscreen_node (offscreen, FALSE);
+      g_object_unref (surface);
+    }
+  else
+    {
+      if (offscreen->node.data)
+        g_object_unref (offscreen->node.data);
+
+      offscreen->node.data = surface;
+      _surface_check_children (offscreen, offscreen);
+    }
 }
 
-
 static void
-_mech_stage_update_offscreen (MechStage     *stage,
+_mech_stage_resize_offscreen (MechStage     *stage,
                               OffscreenNode *offscreen)
 {
   gint width, height;
@@ -397,11 +452,12 @@ render_stage_enter (MechStage          *stage,
       cairo_set_matrix (target->cr, &cur);
     }
 
-  offscreen = _mech_stage_check_needs_offscreen (stage, area);
+  _mech_stage_check_update_surface (stage, area);
+  offscreen = _area_peek_offscreen (area);
 
   if (offscreen)
     {
-      _mech_stage_update_offscreen (stage, offscreen);
+      _mech_stage_resize_offscreen (stage, offscreen);
       render_stage_context_push_target (context, offscreen);
 
       /* Check again using the new target's invalidated area */
@@ -969,13 +1025,23 @@ _mech_stage_set_root_surface (MechStage   *stage,
   MechStagePrivate *priv = mech_stage_get_instance_private (stage);
   OffscreenNode *offscreen;
 
-  g_assert (!priv->offscreens);
+  if (priv->offscreens)
+    offscreen = priv->offscreens;
+  else
+    {
+      offscreen = g_new0 (OffscreenNode, 1);
+      offscreen->area = priv->areas->node.data;
+      priv->offscreens = offscreen;
+    }
 
-  offscreen = g_new0 (OffscreenNode, 1);
-  offscreen->node.data = surface;
-  offscreen->area = priv->areas->node.data;
-  priv->offscreens = offscreen;
+  if (surface == priv->offscreens->node.data)
+    return;
 
+  if (offscreen->node.data)
+    g_object_unref (offscreen->node.data);
+
+  offscreen->node.data = g_object_ref (surface);
+  _surface_check_children (offscreen, offscreen);
   _mech_stage_invalidate (stage, NULL, NULL, FALSE);
 }
 

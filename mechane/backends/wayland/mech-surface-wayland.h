@@ -50,15 +50,10 @@ struct _MechSurfaceWaylandClass
                           gint                  ty);
 };
 
-typedef enum {
-  MECH_BACKING_SURFACE_TYPE_EGL,
-  MECH_BACKING_SURFACE_TYPE_SHM
-} MechBackingSurfaceType;
-
 GType         mech_surface_wayland_get_type   (void) G_GNUC_CONST;
 
-MechSurface * _mech_surface_wayland_new       (MechBackingSurfaceType  type,
-                                               struct wl_surface      *wl_surface);
+MechSurface * _mech_surface_wayland_new       (MechSurfaceType         surface_type,
+                                               MechSurface            *parent);
 void          _mech_surface_wayland_translate (MechSurfaceWayland     *surface,
                                                gint                    tx,
                                                gint                    ty);

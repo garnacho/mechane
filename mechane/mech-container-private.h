@@ -23,10 +23,11 @@
 
 G_BEGIN_DECLS
 
-void         _mech_container_set_surface        (MechContainer *container,
-                                                 MechSurface   *surface);
-MechStage  * _mech_container_get_stage          (MechContainer *container);
-MechCursor * _mech_container_get_current_cursor (MechContainer *container);
+void          _mech_container_set_surface        (MechContainer *container,
+                                                  MechSurface   *surface);
+MechSurface * _mech_container_get_surface        (MechContainer *container);
+MechStage   * _mech_container_get_stage          (MechContainer *container);
+MechCursor  * _mech_container_get_current_cursor (MechContainer *container);
 
 G_END_DECLS
 

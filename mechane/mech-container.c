@@ -636,12 +636,22 @@ _mech_container_set_surface (MechContainer *container,
       priv->surface = NULL;
     }
 
-  priv->surface = g_object_ref (surface);
-  g_object_set (surface, "area", priv->root, NULL);
-  mech_container_get_size (container, &width, &height);
-  _mech_surface_set_size (surface, width, height);
+  if (surface)
+    {
+      priv->surface = g_object_ref (surface);
+      g_object_set (surface, "area", priv->root, NULL);
+      _mech_stage_set_root_surface (priv->stage, surface);
+    }
+}
 
-  _mech_stage_set_root_surface (priv->stage, surface);
+MechSurface *
+_mech_container_get_surface (MechContainer *container)
+{
+  MechContainerPrivate *priv;
+
+  priv = mech_container_get_instance_private (container);
+
+  return priv->surface;
 }
 
 MechCursor *
@@ -736,7 +746,7 @@ mech_container_process_updates (MechContainer *container)
 
   priv = mech_container_get_instance_private (container);
 
-  if (!priv->resize_requested && !priv->redraw_requested)
+  if (!priv->surface || (!priv->resize_requested && !priv->redraw_requested))
     return;
 
   /* This call may modify the underlying surfaces */

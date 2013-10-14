@@ -47,11 +47,14 @@ mech_backend_create_window (MechBackend *backend)
 }
 
 MechSurface *
-mech_backend_create_surface (MechBackend *backend)
+mech_backend_create_surface (MechBackend     *backend,
+                             MechSurface     *parent,
+                             MechSurfaceType  surface_type)
 {
   g_return_val_if_fail (MECH_IS_BACKEND (backend), NULL);
 
-  return MECH_BACKEND_GET_CLASS (backend)->create_surface (backend);
+  return MECH_BACKEND_GET_CLASS (backend)->create_surface (backend, parent,
+                                                           surface_type);
 }
 
 MechCursor *
