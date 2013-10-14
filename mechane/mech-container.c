@@ -128,8 +128,7 @@ mech_container_finalize (GObject *object)
 
 static void
 mech_container_draw (MechContainer  *container,
-                     cairo_t        *cr,
-                     cairo_region_t *region)
+                     cairo_t        *cr)
 {
   MechContainerPrivate *priv;
 
@@ -582,10 +581,9 @@ mech_container_class_init (MechContainerClass *klass)
                   G_SIGNAL_RUN_LAST,
                   G_STRUCT_OFFSET (MechContainerClass, draw),
                   NULL, NULL,
-                  _mech_marshal_VOID__BOXED_BOXED,
-                  G_TYPE_NONE, 2,
-                  CAIRO_GOBJECT_TYPE_CONTEXT | G_SIGNAL_TYPE_STATIC_SCOPE,
-                  CAIRO_GOBJECT_TYPE_REGION | G_SIGNAL_TYPE_STATIC_SCOPE);
+                  g_cclosure_marshal_VOID__BOXED,
+                  G_TYPE_NONE, 1,
+                  CAIRO_GOBJECT_TYPE_CONTEXT | G_SIGNAL_TYPE_STATIC_SCOPE);
   signals[UPDATE_NOTIFY] =
     g_signal_new ("update-notify",
                   G_TYPE_FROM_CLASS (klass),
@@ -741,7 +739,6 @@ void
 mech_container_process_updates (MechContainer *container)
 {
   MechContainerPrivate *priv;
-  cairo_region_t *region;
   cairo_t *cr;
 
   priv = mech_container_get_instance_private (container);
@@ -758,20 +755,16 @@ mech_container_process_updates (MechContainer *container)
     }
 
   cr = _mech_surface_cairo_create (priv->surface);
-  _mech_surface_acquire (priv->surface);
-  region = _mech_surface_get_clip (priv->surface);
 
-  g_signal_emit (container, signals[DRAW], 0, cr, region);
+  g_signal_emit (container, signals[DRAW], 0, cr);
 
   if (cairo_status (cr) != CAIRO_STATUS_SUCCESS)
     g_warning ("Cairo context got error '%s'",
                cairo_status_to_string (cairo_status (cr)));
 
-  _mech_surface_release (priv->surface);
   priv->resize_requested = FALSE;
   priv->redraw_requested = FALSE;
 
-  cairo_region_destroy (region);
   cairo_destroy (cr);
 }
 

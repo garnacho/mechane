@@ -44,8 +44,7 @@ struct _MechContainerClass
   GObjectClass parent_class;
 
   void       (* draw)            (MechContainer  *container,
-                                  cairo_t        *cr,
-                                  cairo_region_t *clip);
+                                  cairo_t        *cr);
   gboolean   (* handle_event)    (MechContainer  *container,
                                   MechEvent      *event);
 

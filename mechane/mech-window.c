@@ -176,8 +176,7 @@ mech_window_finalize (GObject *object)
 
 static void
 mech_window_draw (MechContainer  *container,
-                  cairo_t        *cr,
-                  cairo_region_t *clip)
+                  cairo_t        *cr)
 {
   MechWindow *window = (MechWindow *) container;
   MechWindowPrivate *priv;
@@ -185,7 +184,7 @@ mech_window_draw (MechContainer  *container,
   if (!mech_window_get_visible (window))
     return;
 
-  MECH_CONTAINER_CLASS (mech_window_parent_class)->draw (container, cr, clip);
+  MECH_CONTAINER_CLASS (mech_window_parent_class)->draw (container, cr);
 }
 
 static void
