@@ -107,7 +107,16 @@ static gboolean
 mech_surface_set_parent_impl (MechSurface *surface,
                               MechSurface *parent)
 {
-  return TRUE;
+  MechSurfacePrivate *priv;
+
+  priv = mech_surface_get_instance_private (surface);
+
+  if (!parent ||
+      (priv->surface_type == MECH_SURFACE_TYPE_OFFSCREEN &&
+       priv->renderer_type == _mech_surface_get_renderer_type (parent)))
+    return TRUE;
+
+  return FALSE;
 }
 
 static void

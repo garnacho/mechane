@@ -20,6 +20,7 @@
 #include "mech-surface-wayland-egl.h"
 #include "mech-surface-wayland-texture.h"
 #include "mech-backend-wayland.h"
+#include "subsurface-client-protocol.h"
 
 G_DEFINE_ABSTRACT_TYPE (MechSurfaceWayland, mech_surface_wayland,
                         MECH_TYPE_SURFACE)
@@ -31,6 +32,7 @@ enum {
 struct _MechSurfaceWaylandPriv
 {
   struct wl_surface *wl_surface;
+  struct wl_subsurface *wl_subsurface;
 };
 
 static void
@@ -92,10 +94,101 @@ mech_surface_wayland_finalize (GObject *object)
 
   priv = ((MechSurfaceWayland *) object)->_priv;
 
+  if (priv->wl_subsurface)
+    wl_subsurface_destroy (priv->wl_subsurface);
+
   if (priv->wl_surface)
     wl_surface_destroy (priv->wl_surface);
 
   G_OBJECT_CLASS (mech_surface_wayland_parent_class)->finalize (object);
+}
+
+static void
+_set_empty_input_region (MechBackendWayland *backend,
+                         struct wl_surface  *wl_surface)
+{
+  struct wl_region *wl_region;
+
+  wl_region = wl_compositor_create_region (backend->wl_compositor);
+  wl_surface_set_input_region (wl_surface, wl_region);
+  wl_region_destroy (wl_region);
+}
+
+static gboolean
+mech_surface_wayland_set_parent (MechSurface *surface,
+                                 MechSurface *parent)
+{
+  MechSurfaceType surface_type, parent_type;
+  MechSurfaceWaylandPriv *priv;
+
+  surface_type = _mech_surface_get_surface_type (surface);
+  priv = ((MechSurfaceWayland *) surface)->_priv;
+
+  if (priv->wl_subsurface)
+    {
+      wl_subsurface_destroy (priv->wl_subsurface);
+      priv->wl_subsurface = NULL;
+    }
+
+  if (parent && surface_type != MECH_SURFACE_TYPE_OFFSCREEN)
+    {
+      struct wl_surface *parent_wl_surface;
+      MechBackendWayland *backend;
+
+      backend = _mech_backend_wayland_get ();
+      parent_type = _mech_surface_get_surface_type (parent);
+      g_object_get (parent, "wl-surface", &parent_wl_surface, NULL);
+
+      if (!backend->wl_subcompositor)
+        return FALSE;
+
+      if (parent_type == MECH_SURFACE_TYPE_OFFSCREEN)
+        return FALSE;
+
+      if (!priv->wl_surface || !parent_wl_surface)
+        return FALSE;
+
+      _set_empty_input_region (backend, priv->wl_surface);
+
+      priv->wl_subsurface =
+        wl_subcompositor_get_subsurface (backend->wl_subcompositor,
+                                         priv->wl_surface,
+                                         parent_wl_surface);
+      return TRUE;
+    }
+
+  return MECH_SURFACE_CLASS (mech_surface_wayland_parent_class)->set_parent (surface, parent);
+}
+
+static void
+mech_surface_wayland_set_above (MechSurface *surface,
+                                MechSurface *sibling)
+{
+  MechSurfaceWaylandPriv *priv, *above_priv;
+  MechSurface *above = NULL;
+
+  priv = ((MechSurfaceWayland *) surface)->_priv;
+
+  if (!priv->wl_subsurface)
+    return;
+
+  if (sibling)
+    {
+      above_priv = ((MechSurfaceWayland *) sibling)->_priv;
+
+      if (above_priv->wl_surface)
+        above = sibling;
+    }
+
+  if (!above)
+    above = _mech_surface_get_parent (surface);
+
+  if (!above)
+    return;
+
+  above_priv = ((MechSurfaceWayland *) above)->_priv;
+  wl_subsurface_place_above (priv->wl_subsurface,
+                             above_priv->wl_surface);
 }
 
 static void
@@ -111,6 +204,26 @@ mech_surface_wayland_push_update (MechSurface          *surface,
 }
 
 static void
+mech_surface_wayland_render (MechSurface *surface,
+                             cairo_t     *cr)
+{
+  MechSurfaceWaylandPriv *priv;
+
+  priv = ((MechSurfaceWayland *) surface)->_priv;
+
+  if (!priv->wl_subsurface)
+    MECH_SURFACE_CLASS (mech_surface_wayland_parent_class)->render (surface, cr);
+  else
+    {
+      gdouble x, y;
+
+      x = y = 0;
+      cairo_user_to_device (cr, &x, &y);
+      wl_subsurface_set_position (priv->wl_subsurface, (gint) x, (gint) y);
+    }
+}
+
+static void
 mech_surface_wayland_class_init (MechSurfaceWaylandClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
@@ -121,7 +234,10 @@ mech_surface_wayland_class_init (MechSurfaceWaylandClass *klass)
   object_class->get_property = mech_surface_wayland_get_property;
   object_class->finalize = mech_surface_wayland_finalize;
 
+  surface_class->set_parent = mech_surface_wayland_set_parent;
+  surface_class->set_above = mech_surface_wayland_set_above;
   surface_class->push_update = mech_surface_wayland_push_update;
+  surface_class->render = mech_surface_wayland_render;
 
   g_object_class_install_property (object_class,
                                    PROP_WL_SURFACE,
