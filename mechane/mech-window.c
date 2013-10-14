@@ -25,11 +25,6 @@
 #include <mechane/mech-window-private.h>
 #include <mechane/mechane.h>
 
-enum {
-  CROSSING_ENTER = 1 << 1,
-  CROSSING_LEAVE = 1 << 2,
-};
-
 typedef struct _MechWindowPrivate MechWindowPrivate;
 typedef struct _MechStateData MechStateData;
 
