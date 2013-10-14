@@ -89,16 +89,16 @@ static const struct gear_template gear_templates[] = {
 static GLfloat light_pos[4] = {5.0, 5.0, 10.0, 0.0};
 
 typedef struct {
-  MechArea parent_instance;
+  MechButton parent_instance;
   MechAnimation *animation;
   struct gears *gears;
 } EglArea;
 
 typedef struct {
-  MechAreaClass parent_class;
+  MechButtonClass parent_class;
 } EglAreaClass;
 
-G_DEFINE_TYPE (EglArea, egl_area, MECH_TYPE_AREA)
+G_DEFINE_TYPE (EglArea, egl_area, MECH_TYPE_BUTTON)
 
 static void
 make_gear(const struct gear_template *t)
@@ -331,7 +331,7 @@ static void
 egl_area_draw (MechArea *area,
                cairo_t  *cr)
 {
-  cairo_rectangle_t window_allocation, allocation;
+  cairo_rectangle_t allocation;
   cairo_surface_t *surface;
   cairo_device_t *device;
   EGLContext *prev_context;
@@ -345,10 +345,6 @@ egl_area_draw (MechArea *area,
 
   surface = cairo_get_target (cr);
   mech_area_get_allocated_size (area, &allocation);
-  mech_area_get_allocated_size (mech_container_get_root (MECH_CONTAINER (window)),
-                                &window_allocation);
-
-  mech_area_transform_point (area, NULL, &allocation.x, &allocation.y);
 
   if (cairo_surface_get_type (surface) != CAIRO_SURFACE_TYPE_GL)
     return;
@@ -367,8 +363,8 @@ egl_area_draw (MechArea *area,
                  prev_surface, prev_surface,
                  gears->context);
 
-  glViewport (allocation.x, window_allocation.height - allocation.y - allocation.height, allocation.width, allocation.height);
-  glScissor (allocation.x, window_allocation.height - allocation.y - allocation.height, allocation.width, allocation.height);
+  glViewport (0, 0, allocation.width, allocation.height);
+  glScissor (0, 0, allocation.width, allocation.height);
 
   glEnable(GL_SCISSOR_TEST);
   glClear(GL_DEPTH_BUFFER_BIT);
@@ -421,6 +417,8 @@ egl_area_class_init (EglAreaClass *klass)
 static void
 egl_area_init (EglArea *area)
 {
+  mech_area_set_clip (MECH_AREA (area), TRUE);
+  mech_area_set_surface_type (MECH_AREA (area), MECH_SURFACE_TYPE_GL);
 }
 
 static MechArea *
@@ -432,13 +430,11 @@ egl_area_new (void)
 MechArea *
 demo_egl (void)
 {
-  MechArea *box, *area, *button;
+  MechArea *box, *button;
 
   box = mech_fixed_box_new ();
 
-  button = mech_button_new ();
-  area = egl_area_new ();
-  mech_area_add (button, area);
+  button = egl_area_new ();
   mech_area_add (box, button);
 
   mech_fixed_box_attach (MECH_FIXED_BOX (box), button,
@@ -450,9 +446,7 @@ demo_egl (void)
   mech_fixed_box_attach (MECH_FIXED_BOX (box), button,
                          MECH_SIDE_BOTTOM, MECH_SIDE_BOTTOM, MECH_UNIT_PX, 150);
 
-  button = mech_button_new ();
-  area = egl_area_new ();
-  mech_area_add (button, area);
+  button = egl_area_new ();
   mech_area_add (box, button);
 
   mech_fixed_box_attach (MECH_FIXED_BOX (box), button,
