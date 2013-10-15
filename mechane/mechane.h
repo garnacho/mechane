@@ -70,6 +70,7 @@ G_BEGIN_DECLS
 #include <mechane/mech-text-input.h>
 
 #include <mechane/mech-gl-view.h>
+#include <mechane/mech-gl-box.h>
 
 /* High-level widgets */
 #include <mechane/mech-check-mark.h>

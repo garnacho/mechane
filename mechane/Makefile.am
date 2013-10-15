@@ -29,6 +29,7 @@ mech_sources = 			\
 	mech-gesture-drag.c	\
 	mech-gesture-swipe.c	\
 	mech-gl-container.c	\
+	mech-gl-box.c		\
 	mech-gl-view.c		\
 	mech-image.c		\
 	mech-linear-box.c	\
