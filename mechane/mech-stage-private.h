@@ -91,6 +91,10 @@ gboolean    _mech_stage_get_renderable_rect (MechStage         *stage,
                                              MechArea          *area,
                                              cairo_rectangle_t *rect);
 
+MechSurface * _mech_stage_get_rendering_surface (MechStage     *stage,
+                                                 MechArea      *area);
+
+
 G_END_DECLS
 
 #endif /* __MECH_STAGE_H__ */

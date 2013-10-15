@@ -1278,3 +1278,14 @@ _mech_stage_get_renderable_rect (MechStage         *stage,
 
   return _mech_surface_area_is_rendered (offscreen->node.data, area, rect);
 }
+
+MechSurface *
+_mech_stage_get_rendering_surface (MechStage *stage,
+                                   MechArea  *area)
+{
+  OffscreenNode *offscreen;
+
+  offscreen = _mech_stage_find_container_offscreen (stage, area);
+
+  return (offscreen) ? offscreen->node.data : NULL;
+}
