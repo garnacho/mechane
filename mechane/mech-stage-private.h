@@ -77,6 +77,10 @@ GPtrArray * _mech_stage_pick_for_event      (MechStage       *stage,
 
 void        _mech_stage_notify_depth_change (MechStage       *stage,
                                              MechArea        *area);
+void        _mech_stage_notify_visibility_change
+                                            (MechStage       *stage,
+                                             MechArea        *area);
+
 
 void        _mech_stage_invalidate          (MechStage       *stage,
                                              MechArea        *area,

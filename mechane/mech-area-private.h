@@ -42,6 +42,8 @@ void             _mech_area_get_stage_rect        (MechArea          *area,
                                                    cairo_rectangle_t *rect);
 void             _mech_area_reset_surface_type    (MechArea          *area,
                                                    MechSurfaceType    surface_type);
+void             _mech_area_notify_visibility_change (MechArea       *area);
+
 
 
 G_END_DECLS

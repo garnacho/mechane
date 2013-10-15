@@ -1558,33 +1558,18 @@ mech_area_get_state (MechArea *area)
   return priv->state;
 }
 
-static gboolean
-_area_node_visibility_change (GNode    *node,
-                              gpointer  user_data)
-{
-  MechArea *area = node->data;
-
-  g_signal_emit (area, signals[VISIBILITY_CHANGED], 0);
-
-  return FALSE;
-}
-
-static void
+void
 _mech_area_notify_visibility_change (MechArea *area)
 {
-  MechAreaPrivate *priv;
-
-  priv = mech_area_get_instance_private (area);
-  g_node_traverse (priv->node,
-                   G_PRE_ORDER, G_TRAVERSE_ALL,
-                   -1, _area_node_visibility_change,
-                   NULL);
+  g_signal_emit (area, signals[VISIBILITY_CHANGED], 0);
 }
 
 void
 mech_area_set_parent (MechArea *area,
                       MechArea *parent)
 {
+  gboolean was_visible, is_visible;
+  MechStage *stage = NULL;
   MechAreaPrivate *priv;
 
   g_return_if_fail (MECH_IS_AREA (area));
@@ -1595,11 +1580,19 @@ mech_area_set_parent (MechArea *area,
   if (priv->parent == parent)
     return;
 
+  was_visible = priv->parent && mech_area_is_visible (area);
+
   g_object_ref (area);
+
+  if (parent)
+    stage = _mech_area_get_stage (parent);
+  else if (priv->parent)
+    stage = _mech_area_get_stage (priv->parent);
 
   if (priv->node->parent)
     {
-      mech_area_redraw (area, NULL);
+      if (mech_area_is_visible (priv->node->parent->data))
+        mech_area_redraw (area, NULL);
       _mech_stage_remove (priv->node);
     }
 
@@ -1607,6 +1600,7 @@ mech_area_set_parent (MechArea *area,
 
   if (parent)
     {
+      stage = _mech_area_get_stage (parent);
       _mech_stage_add (_mech_area_get_node (parent), priv->node);
       mech_area_check_size (area);
     }
@@ -1618,7 +1612,15 @@ mech_area_set_parent (MechArea *area,
       priv->need_allocate_size = TRUE;
     }
 
-  _mech_area_notify_visibility_change (area);
+  is_visible = priv->parent && mech_area_is_visible (area);
+
+  if (stage && is_visible != was_visible)
+    {
+      _mech_stage_notify_visibility_change (stage, area);
+
+      if (is_visible)
+        mech_area_redraw (area, NULL);
+    }
 
   g_object_unref (area);
 }
@@ -1652,7 +1654,13 @@ mech_area_set_visible (MechArea *area,
 
   if (parent_visible)
     {
-      _mech_area_notify_visibility_change (area);
+      MechStage *stage;
+
+      stage = _mech_area_get_stage (area);
+
+      if (stage)
+        _mech_stage_notify_visibility_change (stage, area);
+
       mech_area_redraw (area, NULL);
     }
 }

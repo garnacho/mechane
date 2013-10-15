@@ -1213,6 +1213,57 @@ _mech_stage_notify_depth_change (MechStage *stage,
                       (StageNode *) node);
 }
 
+static gboolean
+_area_notify_visibility_change (GNode    *node,
+                                gpointer  user_data)
+{
+  _mech_area_notify_visibility_change (node->data);
+  return FALSE;
+}
+
+void
+_mech_stage_notify_visibility_change (MechStage *stage,
+                                      MechArea  *area)
+{
+  OffscreenNode *offscreen;
+  MechStagePrivate *priv;
+
+  priv = mech_stage_get_instance_private (stage);
+
+  if (!mech_area_is_visible (area))
+    {
+      offscreen = _area_peek_offscreen (area);
+
+      if (offscreen)
+        _mech_stage_destroy_offscreen_node (offscreen, TRUE);
+      else
+        {
+          GNode *child, *next;
+
+	  /* Destroy all offscreens that are tied to a child of this area */
+          offscreen = _mech_stage_find_container_offscreen (stage, area);
+          child = offscreen->node.children;
+
+          while (child)
+            {
+              OffscreenNode *child_offscreen = (OffscreenNode *) child;
+
+              next = child->next;
+
+              if (mech_area_is_ancestor (child_offscreen->area, area))
+                _mech_stage_destroy_offscreen_node (child_offscreen, TRUE);
+
+              child = next;
+            }
+        }
+    }
+
+  g_node_traverse (_mech_area_get_node (area),
+                   G_PRE_ORDER, G_TRAVERSE_ALL, -1,
+                   _area_notify_visibility_change,
+                   NULL);
+}
+
 gboolean
 _mech_stage_get_renderable_rect (MechStage         *stage,
                                  MechArea          *area,
