@@ -337,14 +337,10 @@ render_stage_context_push_target (RenderStageContext *context,
   MechSurface *prev_offscreen = NULL;
   RenderingTarget target = { 0 };
 
-  if (!context->target_stack)
-    context->target_stack = g_array_new (FALSE, FALSE,
-                                         sizeof (RenderingTarget));
-
   target.offscreen = offscreen;
   _mech_surface_acquire (offscreen->node.data);
 
-  if (offscreen->node.parent)
+  if (offscreen->node.parent || !context->cr)
     target.cr = _mech_surface_cairo_create (offscreen->node.data);
   else
     target.cr = cairo_reference (context->cr);
@@ -589,8 +585,9 @@ render_stage_context_init (RenderStageContext *context,
   context->functions.enter = (EnterNodeFunc) render_stage_enter;
   context->functions.leave = (LeaveNodeFunc) render_stage_leave;
   context->functions.visit = (VisitNodeFunc) render_stage_visit;
-  context->cr = cairo_reference (cr);
-  context->target_stack = NULL;
+  context->cr = (cr) ? cairo_reference (cr) : NULL;
+  context->target_stack = g_array_new (FALSE, FALSE,
+                                       sizeof (RenderingTarget));
   context->prev_offscreens = g_array_new (FALSE, FALSE,
                                           sizeof (MechSurface *));
 
@@ -601,13 +598,12 @@ static void
 render_stage_context_finish (RenderStageContext *context)
 {
   render_stage_context_pop_target (context);
-  cairo_destroy (context->cr);
 
-  g_assert (context->target_stack == NULL ||
-            context->target_stack->len == 0);
+  if (context->cr)
+    cairo_destroy (context->cr);
 
-  if (context->target_stack)
-    g_array_unref (context->target_stack);
+  g_assert (context->target_stack->len == 0);
+  g_array_unref (context->target_stack);
 
   g_assert (context->prev_offscreens->len == 0);
   g_array_unref (context->prev_offscreens);
