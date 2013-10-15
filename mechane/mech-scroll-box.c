@@ -192,12 +192,30 @@ mech_scroll_box_child_resize (MechArea *area,
 }
 
 static void
+mech_scroll_box_add (MechArea *area,
+                     MechArea *child)
+{
+  mech_area_set_surface_type (child, MECH_SURFACE_TYPE_OFFSCREEN);
+  MECH_AREA_CLASS (mech_scroll_box_parent_class)->add (area, child);
+}
+
+static void
+mech_scroll_box_remove (MechArea *area,
+                        MechArea *child)
+{
+  mech_area_set_surface_type (child, MECH_SURFACE_TYPE_NONE);
+  MECH_AREA_CLASS (mech_scroll_box_parent_class)->remove (area, child);
+}
+
+static void
 mech_scroll_box_class_init (MechScrollBoxClass *klass)
 {
   MechAreaClass *area_class = MECH_AREA_CLASS (klass);
 
   area_class->allocate_size = mech_scroll_box_allocate_size;
   area_class->child_resize = mech_scroll_box_child_resize;
+  area_class->add = mech_scroll_box_add;
+  area_class->remove = mech_scroll_box_remove;
 }
 
 static void
