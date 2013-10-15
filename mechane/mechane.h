@@ -69,6 +69,8 @@ G_BEGIN_DECLS
 #include <mechane/mech-text-view.h>
 #include <mechane/mech-text-input.h>
 
+#include <mechane/mech-gl-view.h>
+
 /* High-level widgets */
 #include <mechane/mech-check-mark.h>
 #include <mechane/mech-image.h>
