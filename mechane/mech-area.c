@@ -118,6 +118,7 @@ struct _MechAreaDelegateData
 
 static guint signals[LAST_SIGNAL] = { 0 };
 static GQuark quark_window = 0;
+static GQuark quark_container = 0;
 
 G_DEFINE_TYPE_WITH_PRIVATE (MechArea, mech_area, G_TYPE_INITIALLY_UNOWNED)
 
@@ -513,6 +514,7 @@ mech_area_class_init (MechAreaClass *klass)
                   G_TYPE_NONE, 1, G_TYPE_ERROR | G_SIGNAL_TYPE_STATIC_SCOPE);
 
   quark_window = g_quark_from_static_string ("MECH_QUARK_WINDOW");
+  quark_container = g_quark_from_static_string ("MECH_QUARK_CONTAINER");
 }
 
 void
@@ -894,17 +896,24 @@ _mech_area_set_window (MechArea   *area,
   g_object_set_qdata ((GObject *) area, quark_window, window);
 }
 
+void
+_mech_area_set_container (MechArea      *area,
+                          MechContainer *container)
+{
+  g_object_set_qdata ((GObject *) area, quark_container, container);
+}
+
 MechStage *
 _mech_area_get_stage (MechArea *area)
 {
-  MechWindow *window;
+  MechContainer *container;
 
-  window = mech_area_get_window (area);
+  container = _mech_area_get_container (area);
 
-  if (!window)
+  if (!container)
     return NULL;
 
-  return _mech_container_get_stage ((MechContainer *) window);
+  return _mech_container_get_stage (container);
 }
 
 MechWindow *
@@ -919,6 +928,20 @@ mech_area_get_window (MechArea *area)
 
   root = g_node_get_root (node);
   return g_object_get_qdata (root->data, quark_window);
+}
+
+MechContainer *
+_mech_area_get_container (MechArea *area)
+{
+  GNode *node, *root;
+
+  node = _mech_area_get_node (area);
+
+  if (!node)
+    return NULL;
+
+  root = g_node_get_root (node);
+  return g_object_get_qdata (root->data, quark_container);
 }
 
 MechArea *
@@ -1237,8 +1260,8 @@ void
 mech_area_set_matrix (MechArea             *area,
                       const cairo_matrix_t *matrix)
 {
+  MechContainer *container;
   MechAreaPrivate *priv;
-  MechWindow *window;
   MechStage *stage;
 
   g_return_if_fail (MECH_IS_AREA (area));
@@ -1249,11 +1272,11 @@ mech_area_set_matrix (MechArea             *area,
   if (MATRIX_IS_EQUAL (*matrix, priv->matrix))
     return;
 
-  window = mech_area_get_window (area);
+  container = _mech_area_get_container (area);
 
-  if (window)
+  if (container)
     {
-      stage = _mech_container_get_stage ((MechContainer *) window);
+      stage = _mech_container_get_stage (container);
       _mech_stage_invalidate (stage, area, NULL, TRUE);
     }
 
@@ -1261,10 +1284,10 @@ mech_area_set_matrix (MechArea             *area,
   priv->is_identity =
     (MATRIX_IS_IDENTITY (priv->matrix) == TRUE);
 
-  if (stage)
+  if (container)
     {
       _mech_stage_invalidate (stage, area, NULL, TRUE);
-      mech_container_queue_redraw ((MechContainer *) window);
+      mech_container_queue_redraw (container);
     }
 }
 
@@ -1807,19 +1830,19 @@ void
 mech_area_redraw (MechArea       *area,
                   cairo_region_t *region)
 {
-  MechWindow *window;
+  MechContainer *container;
   MechStage *stage;
 
   g_return_if_fail (MECH_IS_AREA (area));
 
-  window = mech_area_get_window (area);
+  container = _mech_area_get_container (area);
 
-  if (!window)
+  if (!container)
     return;
 
-  stage = _mech_container_get_stage ((MechContainer *) window);
+  stage = _mech_container_get_stage (container);
   _mech_stage_invalidate (stage, area, region, FALSE);
-  mech_container_queue_redraw ((MechContainer *) window);
+  mech_container_queue_redraw (container);
 }
 
 static gdouble
@@ -2039,13 +2062,13 @@ void
 mech_area_grab_focus (MechArea *area,
                       MechSeat *seat)
 {
-  MechWindow *window;
+  MechContainer *container;
 
   g_return_if_fail (MECH_IS_AREA (area));
   g_return_if_fail (MECH_IS_SEAT (seat));
 
-  window = mech_area_get_window (area);
-  mech_container_grab_focus ((MechContainer *) window, area, seat);
+  container = _mech_area_get_container (area);
+  mech_container_grab_focus (container, area, seat);
 }
 
 void

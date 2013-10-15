@@ -97,6 +97,7 @@ mech_container_constructed (GObject *object)
   else
     {
       priv->root = klass->create_root (container);
+      _mech_area_set_container (priv->root, container);
       _mech_stage_set_root (priv->stage, priv->root);
     }
 }

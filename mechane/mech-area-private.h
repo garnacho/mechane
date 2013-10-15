@@ -28,6 +28,10 @@ GNode          * _mech_area_get_node              (MechArea          *area);
 
 void             _mech_area_set_window            (MechArea          *area,
                                                    MechWindow        *window);
+void             _mech_area_set_container         (MechArea          *area,
+                                                   MechContainer     *container);
+MechContainer *  _mech_area_get_container         (MechArea          *area);
+
 gboolean         _mech_area_handle_event          (MechArea          *area,
                                                    MechEvent         *event);
 gboolean         _mech_area_get_visible_rect      (MechArea          *area,
