@@ -14,5 +14,6 @@
     <file alias="demos/scroll-box.c">scroll-box.c</file>
     <file alias="demos/scroll-area.c">scroll-area.c</file>
     <file alias="demos/egl.c">egl.c</file>
+    <file alias="demos/gl-box.c">gl-box.c</file>
   </gresource>
 </gresources>

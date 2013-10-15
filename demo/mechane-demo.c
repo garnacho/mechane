@@ -5,6 +5,7 @@
 #include "scroll-box.c"
 #include "scroll-area.c"
 #include "egl.c"
+#include "gl-box.c"
 
 typedef struct _MechaneDemo MechaneDemo;
 typedef struct _DemoData DemoData;
@@ -49,6 +50,14 @@ DemoData demos[] = {
     "on the draw() handler, 2 instances are then created within overlapped "
     "buttons.",
     demo_egl
+  },
+  { "GL box",
+    "gl-box.c",
+    "MechGLBox implements basic rendering capabilities of child areas onto "
+    "GL textures. Each of those textures has an associated position/matrix, "
+    "which is used in order to render children on a GL scene, and to pick "
+    "the right child on pointer events.",
+    demo_gl_box
   }
 };
 
