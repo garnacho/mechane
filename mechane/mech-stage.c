@@ -946,6 +946,10 @@ _mech_stage_get_size (MechStage *stage,
   gdouble x_value, y_value;
 
   priv = mech_stage_get_instance_private (stage);
+
+  if (!priv->areas)
+    return;
+
   x_value = mech_area_get_extent (priv->areas->node.data, MECH_AXIS_X);
   y_value = mech_area_get_second_extent (priv->areas->node.data,
                                          MECH_AXIS_Y, x_value);
