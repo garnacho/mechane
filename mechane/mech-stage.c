@@ -100,6 +100,7 @@ struct _RenderStageContext
 {
   TraverseStageContext functions;
   GArray *target_stack;
+  GArray *prev_offscreens;
   cairo_t *cr;
 };
 
@@ -333,6 +334,7 @@ static RenderingTarget *
 render_stage_context_push_target (RenderStageContext *context,
                                   OffscreenNode      *offscreen)
 {
+  MechSurface *prev_offscreen = NULL;
   RenderingTarget target = { 0 };
 
   if (!context->target_stack)
@@ -350,6 +352,20 @@ render_stage_context_push_target (RenderStageContext *context,
   _mech_surface_apply_clip (offscreen->node.data, target.cr);
   target.invalidated = _mech_surface_get_clip (offscreen->node.data);
   g_array_append_val (context->target_stack, target);
+
+  /* Add a NULL to the prev_offscreens stack, and
+   * maybe update current surface z-order.
+   */
+  g_array_append_val (context->prev_offscreens, prev_offscreen);
+
+  if (context->prev_offscreens->len > 1)
+    {
+      prev_offscreen = g_array_index (context->prev_offscreens, MechSurface*,
+                                      context->prev_offscreens->len - 2);
+      g_array_index (context->prev_offscreens, MechSurface*,
+                     context->prev_offscreens->len - 2) = offscreen->node.data;
+      _mech_surface_set_above (offscreen->node.data, prev_offscreen);
+    }
 
   return &g_array_index (context->target_stack, RenderingTarget,
                          context->target_stack->len - 1);
@@ -379,6 +395,8 @@ render_stage_context_pop_target (RenderStageContext *context)
 
   g_array_remove_index (context->target_stack,
                         context->target_stack->len - 1);
+  g_array_remove_index (context->prev_offscreens,
+                        context->prev_offscreens->len - 1);
 
   _mech_surface_push_update (offscreen->node.data);
   _mech_surface_release (offscreen->node.data);
@@ -573,6 +591,8 @@ render_stage_context_init (RenderStageContext *context,
   context->functions.visit = (VisitNodeFunc) render_stage_visit;
   context->cr = cairo_reference (cr);
   context->target_stack = NULL;
+  context->prev_offscreens = g_array_new (FALSE, FALSE,
+                                          sizeof (MechSurface *));
 
   render_stage_context_push_target (context, priv->offscreens);
 }
@@ -588,6 +608,9 @@ render_stage_context_finish (RenderStageContext *context)
 
   if (context->target_stack)
     g_array_unref (context->target_stack);
+
+  g_assert (context->prev_offscreens->len == 0);
+  g_array_unref (context->prev_offscreens);
 }
 
 /* Picking */
