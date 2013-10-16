@@ -263,8 +263,11 @@ mech_surface_wayland_shm_release (MechSurface *surface)
   surface_shm = (MechSurfaceWaylandSHM *) surface;
   priv = surface_shm->_priv;
 
-  /* The buffer has been rendered now for sure */
-  priv->buffers[priv->cur_buffer]->blank = FALSE;
+  if (priv->cur_buffer >= 0)
+    {
+      /* The buffer has been rendered now for sure */
+      priv->buffers[priv->cur_buffer]->blank = FALSE;
+    }
 
   /* Store the now previous buffer, unset the current
    * one so it is chosen again at the next render cycle.
