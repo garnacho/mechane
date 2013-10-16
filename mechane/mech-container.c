@@ -121,6 +121,7 @@ mech_container_finalize (GObject *object)
   if (priv->touch_info)
     g_hash_table_unref (priv->touch_info);
 
+  _mech_area_set_container (priv->root, NULL);
   g_object_unref (priv->stage);
   g_object_unref (priv->root);
 
