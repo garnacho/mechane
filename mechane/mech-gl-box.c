@@ -199,6 +199,10 @@ compile_shader (GLuint       type,
   GLuint shader, status;
 
   shader = glCreateShader (type);
+
+  if (shader == 0)
+    return 0;
+
   glShaderSource (shader, 1, &str, NULL);
   glCompileShader (shader);
 
@@ -330,7 +334,8 @@ _mech_gl_box_ensure_picking (MechGLBox *box)
   status = glCheckFramebufferStatus (GL_FRAMEBUFFER);
   glBindFramebuffer (GL_FRAMEBUFFER, 0);
 
-  if (status != GL_FRAMEBUFFER_COMPLETE)
+  if (priv->picking_program_id != 0 &&
+      status != GL_FRAMEBUFFER_COMPLETE)
     {
       g_warning ("Could not create FBO for picking, status: %x", status);
       glDeleteRenderbuffers (N_RBOS, &priv->picking_rbos);
