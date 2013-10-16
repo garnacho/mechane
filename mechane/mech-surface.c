@@ -732,10 +732,11 @@ _mech_surface_cairo_create (MechSurface *surface)
 
   priv = mech_surface_get_instance_private (surface);
   _mech_surface_update_surface (surface);
-  _mech_surface_update_viewport (surface);
 
   cairo_surface = MECH_SURFACE_GET_CLASS (surface)->get_surface (surface);
   g_assert (cairo_surface != NULL);
+
+  _mech_surface_update_viewport (surface);
 
   cr = cairo_create (cairo_surface);
   cairo_scale (cr, priv->scale_x, priv->scale_y);

@@ -22,20 +22,32 @@
 #include "mech-backend-wayland.h"
 #include "mech-surface-wayland-shm.h"
 
+#define N_BUFFERS 2
+
 G_DEFINE_TYPE (MechSurfaceWaylandSHM, mech_surface_wayland_shm,
                MECH_TYPE_SURFACE_WAYLAND)
 
-struct _MechSurfaceWaylandSHMPriv
+typedef struct _BufferData BufferData;
+
+struct _BufferData
 {
   struct wl_shm_pool *wl_pool;
   struct wl_buffer *wl_buffer;
   cairo_surface_t *surface;
   gpointer data;
   gsize data_len;
+  guint blank    : 1;
+  guint released : 1;
+  guint disposed : 1;
+};
+
+struct _MechSurfaceWaylandSHMPriv
+{
+  BufferData *buffers[N_BUFFERS];
+  gint cur_buffer;
+  gint prev_buffer;
   gint tx;
   gint ty;
-
-  guint initialized : 1;
 };
 
 static gint
@@ -60,73 +72,130 @@ _create_temporary_file (gint size)
 }
 
 static void
-_surface_unset_surface (MechSurfaceWaylandSHM *surface)
+_destroy_buffer (BufferData *buffer)
 {
-  MechSurfaceWaylandSHMPriv *priv = surface->_priv;
+  buffer->disposed = TRUE;
 
-  if (priv->surface)
-    {
-      cairo_surface_destroy (priv->surface);
-      priv->surface = NULL;
-    }
-  if (priv->wl_buffer)
-    {
-      wl_buffer_destroy (priv->wl_buffer);
-      priv->wl_buffer = NULL;
-    }
-  if (priv->wl_pool)
-    {
-      wl_shm_pool_destroy (priv->wl_pool);
-      priv->wl_pool = NULL;
-    }
+  /* If the buffer is acquired by the compositor, don't free it
+   * yet, but wait until it's been released.
+   */
+  if (!buffer->released)
+    return;
 
-  if (priv->data && priv->data_len)
-    munmap (priv->data, priv->data_len);
+  if (buffer->surface)
+    cairo_surface_destroy (buffer->surface);
+
+  if (buffer->wl_buffer)
+    wl_buffer_destroy (buffer->wl_buffer);
+
+  if (buffer->wl_pool)
+    wl_shm_pool_destroy (buffer->wl_pool);
+
+  if (buffer->data && buffer->data_len)
+    munmap (buffer->data, buffer->data_len);
+
+  g_free (buffer);
 }
 
 static void
-_surface_ensure_surface (MechSurfaceWaylandSHM *surface,
-                         gint                   width,
-                         gint                   height)
+_buffer_release (gpointer          data,
+                 struct wl_buffer *wl_buffer)
 {
-  MechSurfaceWaylandSHMPriv *priv = surface->_priv;
+  BufferData *buffer = data;
+
+  buffer->released = TRUE;
+
+  if (buffer->disposed)
+    _destroy_buffer (buffer);
+}
+
+static struct wl_buffer_listener buffer_listener_funcs = {
+  _buffer_release
+};
+
+static BufferData *
+_create_buffer (gint width,
+                gint height)
+{
   MechBackendWayland *backend;
+  BufferData *buffer;
   gint stride, fd;
 
-  _surface_unset_surface (surface);
+  buffer = g_new0 (BufferData, 1);
 
   backend = _mech_backend_wayland_get ();
   stride = cairo_format_stride_for_width (CAIRO_FORMAT_ARGB32, width);
-  priv->data_len = stride * height;
+  buffer->data_len = stride * height;
 
-  fd = _create_temporary_file (priv->data_len);
-  priv->data = mmap (NULL, priv->data_len,
+  fd = _create_temporary_file (buffer->data_len);
+  buffer->data = mmap (NULL, buffer->data_len,
                      PROT_READ | PROT_WRITE, MAP_SHARED,
                      fd, 0);
 
-  if (priv->data == MAP_FAILED)
+  if (buffer->data == MAP_FAILED)
     {
       g_critical ("Failed to mmap SHM region: %m");
+      g_free (buffer);
       close(fd);
       return;
     }
 
-  priv->wl_pool = wl_shm_create_pool (backend->wl_shm, fd, priv->data_len);
-  close(fd);
+  buffer->wl_pool = wl_shm_create_pool (backend->wl_shm, fd, buffer->data_len);
+  close (fd);
 
-  priv->wl_buffer = wl_shm_pool_create_buffer (priv->wl_pool, 0,
-                                               width, height, stride,
-                                               WL_SHM_FORMAT_ARGB8888);
-  priv->surface = cairo_image_surface_create_for_data (priv->data,
-                                                       CAIRO_FORMAT_ARGB32,
-                                                       width, height, stride);
-  priv->initialized = FALSE;
+  buffer->wl_buffer = wl_shm_pool_create_buffer (buffer->wl_pool, 0,
+                                                 width, height, stride,
+                                                 WL_SHM_FORMAT_ARGB8888);
+  wl_buffer_add_listener (buffer->wl_buffer, &buffer_listener_funcs, buffer);
+
+  buffer->surface = cairo_image_surface_create_for_data (buffer->data,
+                                                         CAIRO_FORMAT_ARGB32,
+                                                         width, height, stride);
+  buffer->blank = TRUE;
+  buffer->released = TRUE;
+
+  return buffer;
+}
+
+BufferData *
+_create_buffer_similar (BufferData *buffer)
+{
+  return _create_buffer (cairo_image_surface_get_width (buffer->surface),
+                         cairo_image_surface_get_height (buffer->surface));
+}
+
+static void
+_surface_ensure_buffers (MechSurfaceWaylandSHM *surface_shm,
+                         gint                   width,
+                         gint                   height)
+{
+  MechSurfaceWaylandSHMPriv *priv = surface_shm->_priv;
+  gint i;
+
+  for (i = 0; i < N_BUFFERS; i++)
+    {
+      if (priv->buffers[i])
+        _destroy_buffer (priv->buffers[i]);
+
+      priv->buffers[i] = _create_buffer (width, height);
+    }
 }
 
 static void
 mech_surface_wayland_shm_finalize (GObject *object)
 {
-  _surface_unset_surface ((MechSurfaceWaylandSHM *) object);
+  MechSurfaceWaylandSHM *surface_shm;
+  MechSurfaceWaylandSHMPriv *priv;
+  gint i;
+
+  surface_shm = (MechSurfaceWaylandSHM *) object;
+  priv = surface_shm->_priv;
+
+  for (i = 0; i < N_BUFFERS; i++)
+    {
+      if (priv->buffers[i])
+        _destroy_buffer (priv->buffers[i]);
+    }
 
   G_OBJECT_CLASS (mech_surface_wayland_shm_parent_class)->finalize (object);
 }
@@ -139,35 +208,88 @@ mech_surface_wayland_shm_set_size (MechSurface *surface,
   MechSurfaceWaylandSHM *surface_shm;
 
   surface_shm = (MechSurfaceWaylandSHM *) surface;
-  _surface_ensure_surface (surface_shm, width, height);
+  _surface_ensure_buffers (surface_shm, width, height);
 }
 
 static cairo_surface_t *
 mech_surface_wayland_shm_get_surface (MechSurface *surface)
 {
   MechSurfaceWaylandSHM *surface_shm;
+  gint cur_buffer, prev_buffer = 0;
+  MechSurfaceWaylandSHMPriv *priv;
+  BufferData *buffer;
 
   surface_shm = (MechSurfaceWaylandSHM *) surface;
-  return surface_shm->_priv->surface;
+  priv = surface_shm->_priv;
+
+  if (priv->prev_buffer >= 0)
+    prev_buffer = priv->prev_buffer;
+
+  cur_buffer = prev_buffer;
+  buffer = priv->buffers[cur_buffer];
+
+  if (!buffer->released)
+    {
+      /* Pick the next buffer if the current
+       * one wasn't released yet.
+       */
+      cur_buffer = (cur_buffer + 1) % N_BUFFERS;
+      buffer = priv->buffers[cur_buffer];
+
+      if (!buffer->released)
+        {
+          /* If the second buffer is still acquired by the compositor,
+           * create a replacement buffer and dispose the original one,
+           * it will be truly freed after being released by the
+           * compositor.
+           */
+          priv->buffers[cur_buffer] = _create_buffer_similar (buffer);
+          _destroy_buffer (buffer);
+          buffer = priv->buffers[cur_buffer];
+        }
+    }
+
+  priv->cur_buffer = cur_buffer;
+
+  return buffer->surface;
 }
 
 static void
 mech_surface_wayland_shm_release (MechSurface *surface)
 {
   MechSurfaceWaylandSHM *surface_shm;
+  MechSurfaceWaylandSHMPriv *priv;
 
-  /* Mark as initialized after first release */
   surface_shm = (MechSurfaceWaylandSHM *) surface;
-  surface_shm->_priv->initialized = TRUE;
+  priv = surface_shm->_priv;
+
+  /* The buffer has been rendered now for sure */
+  priv->buffers[priv->cur_buffer]->blank = FALSE;
+
+  /* Store the now previous buffer, unset the current
+   * one so it is chosen again at the next render cycle.
+   */
+  priv->prev_buffer = priv->cur_buffer;
+  priv->cur_buffer = -1;
 }
 
 static gint
 mech_surface_wayland_shm_get_age (MechSurface *surface)
 {
   MechSurfaceWaylandSHM *surface_shm;
+  MechSurfaceWaylandSHMPriv *priv;
+  BufferData *buffer;
 
   surface_shm = (MechSurfaceWaylandSHM *) surface;
-  return surface_shm->_priv->initialized ? 1 : 0;
+  priv = surface_shm->_priv;
+  buffer = priv->buffers[priv->cur_buffer];
+
+  if (buffer->blank)
+    return 0;
+  else if (priv->cur_buffer == priv->prev_buffer)
+    return 1;
+  else
+    return 2;
 }
 
 static void
@@ -178,9 +300,11 @@ mech_surface_wayland_shm_push_update (MechSurface          *surface,
   MechSurfaceWaylandSHMPriv *priv = shm_surface->_priv;
   struct wl_surface *wl_surface;
   cairo_rectangle_int_t rect;
+  BufferData *buffer;
   gint i;
 
   g_object_get (surface, "wl-surface", &wl_surface, NULL);
+  buffer = priv->buffers[priv->cur_buffer];
 
   if (wl_surface)
     {
@@ -191,8 +315,11 @@ mech_surface_wayland_shm_push_update (MechSurface          *surface,
                              rect.width, rect.height);
         }
 
-      wl_surface_attach (wl_surface, priv->wl_buffer, priv->tx, priv->ty);
+      wl_surface_attach (wl_surface, buffer->wl_buffer, priv->tx, priv->ty);
       priv->tx = priv->ty = 0;
+
+      /* The current buffer is now acquired by the compositor */
+      buffer->released = FALSE;
     }
 
   MECH_SURFACE_CLASS (mech_surface_wayland_shm_parent_class)->push_update (surface, region);
@@ -239,6 +366,9 @@ mech_surface_wayland_shm_init (MechSurfaceWaylandSHM *surface)
   surface->_priv = G_TYPE_INSTANCE_GET_PRIVATE (surface,
                                                 MECH_TYPE_SURFACE_WAYLAND_SHM,
                                                 MechSurfaceWaylandSHMPriv);
+  surface->_priv->cur_buffer = -1;
+  surface->_priv->prev_buffer = -1;
+
   g_object_set (surface,
                 "renderer-type", MECH_RENDERER_TYPE_SOFTWARE,
                 NULL);
