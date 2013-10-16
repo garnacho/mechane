@@ -235,9 +235,15 @@ _mech_stage_destroy_offscreen_node (OffscreenNode *offscreen,
     }
 
   g_object_set_qdata ((GObject *) offscreen->area, quark_area_offscreen, NULL);
-  _mech_surface_set_parent (offscreen->node.data, NULL);
-  g_object_unref (offscreen->node.data);
+
+  if (offscreen->node.data)
+    {
+      _mech_surface_set_parent (offscreen->node.data, NULL);
+      g_object_unref (offscreen->node.data);
+    }
+
   g_node_unlink ((GNode *) offscreen);
+  g_node_destroy ((GNode *) offscreen);
 }
 
 static void
