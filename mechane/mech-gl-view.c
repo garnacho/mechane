@@ -45,6 +45,8 @@ struct _MechGLViewPrivate
   GHashTable *children;
   MechArea *focus_child;
   MechArea *pointer_child;
+  MechArea *grab_child;
+  GHashTable *touch_children;
 };
 
 static guint signals[N_SIGNALS] = { 0 };
@@ -58,6 +60,7 @@ mech_gl_view_finalize (GObject *object)
 
   priv = mech_gl_view_get_instance_private ((MechGLView *) object);
   g_hash_table_unref (priv->children);
+  g_hash_table_unref (priv->touch_children);
   G_OBJECT_CLASS (mech_gl_view_parent_class)->finalize (object);
 }
 
@@ -167,7 +170,9 @@ mech_gl_view_draw (MechArea *area,
 }
 
 static void
-_mech_gl_view_leave_pointer_child (MechGLView *view)
+_mech_gl_view_leave_child (MechGLView *view,
+                           MechEvent  *orig,
+                           MechArea   *child)
 {
   MechContainer *container;
   MechGLViewPrivate *priv;
@@ -175,52 +180,176 @@ _mech_gl_view_leave_pointer_child (MechGLView *view)
 
   priv = mech_gl_view_get_instance_private (view);
 
-  if (!priv->pointer_child)
-    return;
-
-  container = g_hash_table_lookup (priv->children, priv->pointer_child);
+  container = g_hash_table_lookup (priv->children, child);
   event = mech_event_new (MECH_LEAVE);
-  mech_event_set_area (event, priv->pointer_child);
+  mech_event_set_seat (event, mech_event_get_seat (orig));
+  mech_event_set_area (event, child);
+  event->any.serial = orig->any.serial;
   mech_container_handle_event (container, event);
   mech_event_free (event);
-  priv->pointer_child = NULL;
 }
 
 static void
-_mech_gl_view_update_pointer_child (MechGLView *view,
-                                    MechArea   *child,
-                                    MechEvent  *event)
+_mech_gl_view_enter_child (MechGLView *view,
+                           MechEvent  *orig,
+                           MechArea   *child,
+                           gdouble     child_x,
+                           gdouble     child_y)
 {
+  MechContainer *container;
   MechGLViewPrivate *priv;
+  MechEvent *event;
 
   priv = mech_gl_view_get_instance_private (view);
 
-  if (priv->pointer_child == child)
-    return;
+  container = g_hash_table_lookup (priv->children, child);
+  event = mech_event_new (MECH_MOTION);
+  mech_event_set_seat (event, mech_event_get_seat (orig));
+  mech_event_set_area (event, child);
+  event->input.evtime = orig->input.evtime;
+  event->input.modifiers = orig->input.modifiers;
+  event->pointer.x = child_x;
+  event->pointer.y = child_y;
 
-  _mech_gl_view_leave_pointer_child (view);
-  priv->pointer_child = child;
+  mech_container_handle_event (container, event);
+  mech_event_free (event);
+}
+
+static MechArea *
+_mech_gl_view_get_grab_child (MechGLView *view,
+                              MechEvent  *event)
+{
+  MechGLViewPrivate *priv;
+  gint id;
+
+  priv = mech_gl_view_get_instance_private (view);
+
+  switch (event->type)
+    {
+    case MECH_FOCUS_IN:
+    case MECH_FOCUS_OUT:
+    case MECH_KEY_PRESS:
+    case MECH_KEY_RELEASE:
+      return priv->focus_child;
+    case MECH_MOTION:
+    case MECH_BUTTON_PRESS:
+    case MECH_BUTTON_RELEASE:
+    case MECH_ENTER:
+    case MECH_LEAVE:
+    case MECH_SCROLL:
+      return priv->grab_child;
+    case MECH_TOUCH_DOWN:
+    case MECH_TOUCH_UP:
+    case MECH_TOUCH_MOTION:
+      mech_event_touch_get_id (event, &id);
+      return g_hash_table_lookup (priv->touch_children,
+                                  GINT_TO_POINTER (id));
+    }
+
+  return NULL;
+}
+
+static void
+_mech_gl_view_update_seat_state (MechGLView *view,
+                                 MechEvent  *event,
+                                 MechArea   *grab,
+                                 MechArea   *child,
+                                 gdouble     child_x,
+                                 gdouble     child_y)
+{
+  MechContainer *container = NULL;
+  MechArea *new_grab = NULL;
+  MechGLViewPrivate *priv;
+  gint id;
+
+  priv = mech_gl_view_get_instance_private (view);
+
+  if (grab || child)
+    container = g_hash_table_lookup (priv->children,
+                                     grab ? grab : child);
+
+  if (container &&
+      mech_container_has_grab_for_event (container, event))
+    new_grab = grab ? grab : child;
+
+  switch (event->type)
+    {
+    case MECH_FOCUS_IN:
+    case MECH_FOCUS_OUT:
+    case MECH_KEY_PRESS:
+    case MECH_KEY_RELEASE:
+      priv->focus_child = new_grab;
+      break;
+    case MECH_LEAVE:
+      if (priv->pointer_child)
+        _mech_gl_view_leave_child (view, event, priv->pointer_child);
+
+      priv->pointer_child = NULL;
+      /* Fall through */
+    case MECH_ENTER:
+      priv->grab_child = new_grab;
+      break;
+    case MECH_MOTION:
+    case MECH_BUTTON_PRESS:
+    case MECH_BUTTON_RELEASE:
+    case MECH_SCROLL:
+      if (!new_grab)
+        {
+          if (priv->pointer_child &&
+              priv->pointer_child != child)
+            _mech_gl_view_leave_child (view, event, priv->pointer_child);
+
+          priv->pointer_child = child;
+        }
+
+      if (priv->grab_child && !new_grab &&
+          child && child != priv->grab_child)
+        {
+          g_print ("... lalala\n");
+          /* Send motion event into the child below now that the grab is gone */
+          _mech_gl_view_enter_child (view, event, child, child_x, child_y);
+        }
+
+      priv->grab_child = new_grab;
+      break;
+    case MECH_TOUCH_DOWN:
+    case MECH_TOUCH_UP:
+    case MECH_TOUCH_MOTION:
+      mech_event_touch_get_id (event, &id);
+
+      if (new_grab)
+        g_hash_table_insert (priv->touch_children,
+                             GINT_TO_POINTER (id),
+                             new_grab);
+      else
+        g_hash_table_remove (priv->touch_children,
+                             GINT_TO_POINTER (id));
+      break;
+    }
 }
 
 static gboolean
 mech_gl_view_handle_event (MechArea  *area,
                            MechEvent *event)
 {
+  MechArea *child = NULL, *under_pointer = NULL, *grab_child;
+  MechGLView *view = (MechGLView *) area;
   MechContainer *container = NULL;
+  gdouble x, y, child_x, child_y;
   MechGLViewPrivate *priv;
-  MechArea *child = NULL;
-  gdouble x, y;
+  gboolean retval = FALSE;
 
   if (event->any.target != area ||
       mech_event_has_flags (event, MECH_EVENT_FLAG_CAPTURE_PHASE))
     return FALSE;
 
-  priv = mech_gl_view_get_instance_private ((MechGLView *) area);
+  child_x = child_y = 0;
+  priv = mech_gl_view_get_instance_private (view);
+  grab_child = _mech_gl_view_get_grab_child (view, event);
 
   if (mech_event_pointer_get_coords (event, &x, &y))
     {
       GLStatus gl_status = { 0 };
-      gdouble child_x, child_y;
       MechSurface *surface;
       MechStage *stage;
 
@@ -237,40 +366,34 @@ mech_gl_view_handle_event (MechArea  *area,
       g_signal_emit (area, signals[PICK_CHILD], 0,
                      x, y, &child_x, &child_y, &child);
 
+      if (child && (!grab_child || grab_child == child))
+        {
+          event->pointer.x = child_x;
+          event->pointer.y = child_y;
+        }
+      else if (grab_child)
+        {
+          g_signal_emit (area, signals[CHILD_COORDS], 0,
+                         grab_child, x, y,
+                         &event->pointer.x, &event->pointer.y);
+        }
+
       _gl_status_restore (&gl_status, area);
       _mech_surface_release (surface);
-
-      _mech_gl_view_update_pointer_child ((MechGLView *) area, child, event);
-
-      if (!child)
-        return FALSE;
-
-      event->pointer.x = child_x;
-      event->pointer.y = child_y;
     }
-  else if (event->type == MECH_FOCUS_IN ||
-           event->type == MECH_FOCUS_OUT ||
-           event->type == MECH_KEY_PRESS ||
-           event->type == MECH_KEY_RELEASE)
+
+  if (grab_child || child)
+    container = g_hash_table_lookup (priv->children,
+                                     (grab_child) ? grab_child : child);
+  if (container)
     {
-      /* Keyboard events go to priv->focus_child */
-      child = priv->focus_child;
-
-      if (event->type == MECH_FOCUS_OUT)
-        priv->focus_child = NULL;
+      mech_event_set_area (event, (grab_child) ? grab_child : child);
+      retval = mech_container_handle_event (container, event);
     }
-  else if (event->type == MECH_LEAVE)
-    _mech_gl_view_leave_pointer_child ((MechGLView *) area);
 
-  if (child)
-    container = g_hash_table_lookup (priv->children, child);
-
-  if (!container)
-    return FALSE;
-
-  mech_event_set_area (event, child);
-
-  return mech_container_handle_event (container, event);
+  _mech_gl_view_update_seat_state (view, event, grab_child, child,
+                                   child_x, child_y);
+  return retval;
 }
 
 static void
@@ -395,6 +518,7 @@ mech_gl_view_init (MechGLView *view)
   priv = mech_gl_view_get_instance_private ((MechGLView *) view);
   priv->children = g_hash_table_new_full (NULL, NULL, NULL,
                                           (GDestroyNotify) g_object_unref);
+  priv->touch_children = g_hash_table_new (NULL, NULL);
 
   mech_area_set_surface_type (MECH_AREA (view), MECH_SURFACE_TYPE_GL);
 }
