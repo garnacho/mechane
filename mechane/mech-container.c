@@ -852,3 +852,44 @@ mech_container_grab_focus (MechContainer *container,
                  mech_container_get_focus (container),
                  seat);
 }
+
+gboolean
+mech_container_has_grab_for_event (MechContainer *container,
+                                   MechEvent     *event)
+{
+  MechContainerPrivate *priv;
+  GPtrArray *areas;
+  gint32 id;
+
+  g_return_val_if_fail (MECH_IS_CONTAINER (container), FALSE);
+  g_return_val_if_fail (event != NULL, FALSE);
+
+  priv = mech_container_get_instance_private (container);
+
+  switch (event->type)
+    {
+    case MECH_FOCUS_IN:
+    case MECH_FOCUS_OUT:
+    case MECH_KEY_PRESS:
+    case MECH_KEY_RELEASE:
+      return (priv->keyboard_info.focus_areas &&
+              priv->keyboard_info.focus_areas->len > 0);
+    case MECH_ENTER:
+    case MECH_LEAVE:
+    case MECH_MOTION:
+    case MECH_BUTTON_PRESS:
+    case MECH_BUTTON_RELEASE:
+    case MECH_SCROLL:
+      return (priv->pointer_info.grab_areas &&
+              priv->pointer_info.grab_areas->len > 0);
+    case MECH_TOUCH_DOWN:
+    case MECH_TOUCH_UP:
+    case MECH_TOUCH_MOTION:
+      mech_event_touch_get_id (event, &id);
+      areas = g_hash_table_lookup (priv->touch_info,
+                                   GINT_TO_POINTER (id));
+      return (areas) ? areas->len > 0 : FALSE;
+    }
+
+  return FALSE;
+}

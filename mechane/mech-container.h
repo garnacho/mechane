@@ -81,6 +81,10 @@ void       mech_container_grab_focus      (MechContainer *container,
                                            MechArea      *area,
                                            MechSeat      *seat);
 
+gboolean   mech_container_has_grab_for_event
+                                          (MechContainer *container,
+                                           MechEvent     *event);
+
 G_END_DECLS
 
 #endif /* __MECH_CONTAINER_H__ */
