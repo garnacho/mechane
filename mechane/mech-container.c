@@ -405,8 +405,7 @@ _mech_container_handle_crossing (MechContainer *container,
   if (priv->pointer_info.grab_areas)
     return FALSE;
 
-  if (event->type == MECH_ENTER ||
-      event->type == MECH_MOTION ||
+  if (event->type == MECH_MOTION ||
       event->type == MECH_BUTTON_RELEASE)
     crossing_areas = _mech_stage_pick_for_event (priv->stage,
                                                  NULL, MECH_ENTER,
