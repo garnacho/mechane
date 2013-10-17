@@ -15,6 +15,37 @@
  * License along with this library. If not, see <http://www.gnu.org/licenses/>.
  */
 
+/* Unproject code taken from GLU, licensed as:
+ *
+ * SGI FREE SOFTWARE LICENSE B (Version 2.0, Sept. 18, 2008)
+ * Copyright (C) 1991-2000 Silicon Graphics, Inc. All Rights Reserved.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice including the dates of first publication and
+ * either this permission notice or a reference to
+ * http://oss.sgi.com/projects/FreeB/
+ * shall be included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * SILICON GRAPHICS, INC. BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF
+ * OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ * Except as contained in this notice, the name of Silicon Graphics, Inc.
+ * shall not be used in advertising or otherwise to promote the sale, use or
+ * other dealings in this Software without prior written authorization from
+ * Silicon Graphics, Inc.
+ */
+
 #include <math.h>
 #include <GL/gl.h>
 #include <EGL/egl.h>
@@ -525,6 +556,201 @@ mech_gl_box_pick_child (MechGLView *view,
 }
 
 static void
+_multiply_matrix_vector (const GLdouble matrix[16],
+                         const GLdouble in[4],
+                         GLdouble       result[4])
+{
+  int i;
+
+  for (i = 0; i < 4; i++)
+    {
+      result[i] =
+        in[0] * matrix[0 * 4 + i] + in[1] * matrix[1 * 4 + i] +
+        in[2] * matrix[2 * 4 + i] + in[3] * matrix[3 * 4 + i];
+    }
+}
+
+static void
+_multiply_matrices (const GLdouble a[16],
+                    const GLdouble b[16],
+                    GLdouble       result[16])
+{
+  int i, j;
+
+  for (i = 0; i < 4; i++)
+    {
+      for (j = 0; j < 4; j++)
+        {
+          result[i * 4 + j] =
+            a[i * 4 + 0] * b[0 * 4 + j] + a[i * 4 + 1] * b[1 * 4 + j] +
+            a[i * 4 + 2] * b[2 * 4 + j] + a[i * 4 + 3] * b[3 * 4 + j];
+	}
+    }
+}
+
+static gboolean
+_invert_matrix (const GLdouble m[16],
+                GLdouble       result[16])
+{
+  double inv[16], det;
+  int i;
+
+  inv[0] = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] +
+    m[9] * m[7] * m[14] + m[13] * m[6] * m[11] - m[13] * m[7] * m[10];
+  inv[4] = -m[4] * m[10] * m[15] + m[4] * m[11] * m[14] + m[8] * m[6] * m[15] -
+    m[8] * m[7] * m[14] - m[12] * m[6] * m[11] + m[12] * m[7] * m[10];
+  inv[8] = m[4] * m[9] * m[15] - m[4] * m[11] * m[13] - m[8] * m[5] * m[15] +
+    m[8] * m[7] * m[13] + m[12] * m[5] * m[11] - m[12] * m[7] * m[9];
+  inv[12] = -m[4] * m[9] * m[14] + m[4] * m[10] * m[13] + m[8] * m[5] * m[14] -
+    m[8] * m[6] * m[13] - m[12] * m[5] * m[10] + m[12] * m[6] * m[9];
+  inv[1] = -m[1] * m[10] * m[15] + m[1] * m[11] * m[14] + m[9] * m[2] * m[15] -
+    m[9] * m[3] * m[14] - m[13] * m[2] * m[11] + m[13] * m[3] * m[10];
+  inv[5] = m[0] * m[10] * m[15] - m[0] * m[11] * m[14] - m[8] * m[2] * m[15] +
+    m[8] * m[3] * m[14] + m[12] * m[2] * m[11] - m[12] * m[3] * m[10];
+  inv[9] = -m[0] * m[9] * m[15] + m[0] * m[11] * m[13] + m[8] * m[1] * m[15] -
+    m[8] * m[3] * m[13] - m[12] * m[1] * m[11] + m[12] * m[3] * m[9];
+  inv[13] = m[0] * m[9] * m[14] - m[0] * m[10] * m[13] - m[8] * m[1] * m[14] +
+    m[8] * m[2] * m[13] + m[12] * m[1] * m[10] - m[12] * m[2] * m[9];
+  inv[2] = m[1] * m[6] * m[15] - m[1] * m[7] * m[14] - m[5] * m[2] * m[15] +
+    m[5] * m[3] * m[14] + m[13] * m[2] * m[7] - m[13] * m[3] * m[6];
+  inv[6] = -m[0] * m[6] * m[15] + m[0] * m[7] * m[14] + m[4] * m[2] * m[15] -
+    m[4] * m[3] * m[14] - m[12] * m[2] * m[7] + m[12] * m[3] * m[6];
+  inv[10] =  m[0] * m[5] * m[15] - m[0] * m[7] * m[13] - m[4] * m[1] * m[15] +
+    m[4] * m[3] * m[13] + m[12] * m[1] * m[7] - m[12] * m[3] * m[5];
+  inv[14] = -m[0] * m[5] * m[14] + m[0] * m[6] * m[13] + m[4] * m[1] * m[14] -
+    m[4] * m[2] * m[13] - m[12] * m[1] * m[6] + m[12] * m[2] * m[5];
+  inv[3] =  -m[1] * m[6] * m[11] + m[1] * m[7] * m[10] + m[5] * m[2] * m[11] -
+    m[5] * m[3] * m[10] - m[9] * m[2] * m[7] + m[9] * m[3] * m[6];
+  inv[7] =   m[0] * m[6] * m[11] - m[0] * m[7] * m[10] - m[4] * m[2] * m[11] +
+    m[4] * m[3] * m[10] + m[8] * m[2] * m[7] - m[8] * m[3] * m[6];
+  inv[11] = -m[0] * m[5] * m[11] + m[0] * m[7] * m[9] + m[4] * m[1] * m[11] -
+    m[4] * m[3] * m[9] - m[8] * m[1] * m[7] + m[8] * m[3] * m[5];
+  inv[15] =  m[0] * m[5] * m[10] - m[0] * m[6] * m[9] - m[4] * m[1] * m[10] +
+    m[4] * m[2] * m[9] + m[8] * m[1] * m[6] - m[8] * m[2] * m[5];
+
+  det = m[0] * inv[0] + m[1] * inv[4] + m[2] * inv[8] + m[3] * inv[12];
+
+  if (det == 0)
+    return FALSE;
+
+  det = 1.0 / det;
+
+  for (i = 0; i < 16; i++)
+    result[i] = inv[i] * det;
+
+  return TRUE;
+}
+
+static gboolean
+_unproject_point (GLdouble        win_x,
+                  GLdouble        win_y,
+                  GLdouble        win_z,
+                  const GLdouble  model_matrix[16],
+                  const GLdouble  projection_matrix[16],
+                  const GLint     viewport[4],
+                  GLdouble       *obj_x,
+                  GLdouble       *obj_y,
+                  GLdouble       *obj_z)
+{
+  double result[16];
+  double in[4];
+  double out[4];
+
+  _multiply_matrices (model_matrix, projection_matrix, result);
+
+  if (!_invert_matrix (result, result))
+    return FALSE;
+
+  in[0] = win_x;
+  in[1] = win_y;
+  in[2] = win_z;
+  in[3] = 1.0;
+
+  /* Map x and y from window coordinates */
+  in[0] = (in[0] - viewport[0]) / viewport[2];
+  in[1] = (in[1] - viewport[1]) / viewport[3];
+
+  /* Map to range -1 to 1 */
+  in[0] = in[0] * 2 - 1;
+  in[1] = in[1] * 2 - 1;
+  in[2] = in[2] * 2 - 1;
+
+  _multiply_matrix_vector (result, in, out);
+
+  if (out[3] == 0.0)
+    return FALSE;
+
+  out[0] /= out[3];
+  out[1] /= out[3];
+  out[2] /= out[3];
+  *obj_x = out[0];
+  *obj_y = out[1];
+  *obj_z = out[2];
+
+  return TRUE;
+}
+
+static void
+mech_gl_box_child_coords (MechGLView *view,
+                          MechArea   *child,
+                          gdouble     x,
+                          gdouble     y,
+                          gdouble    *child_x,
+                          gdouble    *child_y)
+{
+  GLdouble model_matrix[16], projection_matrix[16];
+  cairo_rectangle_t allocation, child_alloc;
+  GLdouble near_x, near_y, near_z;
+  GLdouble far_x, far_y, far_z;
+  GLint viewport[4];
+
+  /* Invert Y coordinate */
+  mech_area_get_allocated_size ((MechArea *) view, &allocation);
+  mech_area_get_allocated_size (child, &child_alloc);
+  y = allocation.height - y;
+
+  viewport[0] = viewport[1] = 0;
+  viewport[2] = (GLint) allocation.width;
+  viewport[3] = (GLint) allocation.height;
+
+  glPushMatrix ();
+
+  g_signal_emit (view, signals[POSITION_CHILD], 0, child);
+  glTranslatef (-child_alloc.width / 2, child_alloc.height / 2,
+		-NEAR_PLANE_DISTANCE);
+
+  glGetDoublev (GL_MODELVIEW_MATRIX, model_matrix);
+  glGetDoublev (GL_PROJECTION_MATRIX, projection_matrix);
+
+  _unproject_point (x, y, 0, model_matrix,
+                    projection_matrix, viewport,
+                    &near_x, &near_y, &near_z);
+  _unproject_point (x, y, 1, model_matrix,
+                    projection_matrix, viewport,
+                    &far_x, &far_y, &far_z);
+
+  if (near_z == far_z)
+    {
+      /* The ray is parallel to the z=0 plane, set child
+       * coords to +/- maxdouble based on directionality.
+       */
+      *child_x = (near_x < far_x) ? -G_MAXDOUBLE : G_MAXDOUBLE;
+      *child_y = (near_y < far_y) ? -G_MAXDOUBLE : G_MAXDOUBLE;
+    }
+  else
+    {
+      gdouble z_diff;
+
+      /* near and far points fall on different sides of the plane. */
+      z_diff = - (near_z / (far_z - near_z));
+      *child_x = near_x + ((far_x - near_x) * z_diff);
+      *child_y = -(near_y + ((far_y - near_y) * z_diff));
+    }
+
+  glPopMatrix ();
+}
+
+static void
 mech_gl_box_class_init (MechGLBoxClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
@@ -534,6 +760,7 @@ mech_gl_box_class_init (MechGLBoxClass *klass)
 
   gl_view_class->render_scene = mech_gl_box_render_scene;
   gl_view_class->pick_child = mech_gl_box_pick_child;
+  gl_view_class->child_coords = mech_gl_box_child_coords;
 
   signals[POSITION_CHILD] =
     g_signal_new ("position-child",
