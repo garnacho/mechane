@@ -29,14 +29,8 @@ enum {
 };
 
 typedef struct _MechContainerPrivate MechContainerPrivate;
-typedef struct _MechTouchInfo MechTouchInfo;
 typedef struct _MechPointerInfo MechPointerInfo;
 typedef struct _MechKeyboardInfo MechKeyboardInfo;
-
-struct _MechTouchInfo
-{
-  GPtrArray *event_areas;
-};
 
 struct _MechPointerInfo
 {
@@ -57,7 +51,7 @@ struct _MechContainerPrivate
 
   MechPointerInfo pointer_info;
   MechKeyboardInfo keyboard_info;
-  GHashTable *touch_info;
+  GHashTable *touch_info; /* touch ID -> ptrarray of areas */
 
   gint width;
   gint height;
