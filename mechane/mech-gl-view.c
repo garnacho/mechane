@@ -484,6 +484,20 @@ mech_gl_view_remove (MechArea *area,
 }
 
 static void
+mech_gl_view_visibility_changed (MechArea *area)
+{
+  if (!mech_area_is_visible (area))
+    return;
+
+  /* Ensure there is a suitable GL surface */
+  if (mech_area_get_effective_surface_type (area) == MECH_SURFACE_TYPE_SOFTWARE)
+    mech_area_set_surface_type (area, MECH_SURFACE_TYPE_GL);
+  else if (mech_area_get_surface_type (area) != MECH_SURFACE_TYPE_GL &&
+           mech_area_get_effective_surface_type (area) == MECH_SURFACE_TYPE_GL)
+    mech_area_set_surface_type (area, MECH_SURFACE_TYPE_OFFSCREEN);
+}
+
+static void
 mech_gl_view_class_init (MechGLViewClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
@@ -496,6 +510,7 @@ mech_gl_view_class_init (MechGLViewClass *klass)
   area_class->handle_event = mech_gl_view_handle_event;
   area_class->add = mech_gl_view_add;
   area_class->remove = mech_gl_view_remove;
+  area_class->visibility_changed = mech_gl_view_visibility_changed;
 
   signals[RENDER_SCENE] =
     g_signal_new ("render-scene",
@@ -533,12 +548,10 @@ mech_gl_view_init (MechGLView *view)
 {
   MechGLViewPrivate *priv;
 
-  priv = mech_gl_view_get_instance_private ((MechGLView *) view);
+  priv = mech_gl_view_get_instance_private (view);
   priv->children = g_hash_table_new_full (NULL, NULL, NULL,
                                           (GDestroyNotify) g_object_unref);
   priv->touch_children = g_hash_table_new (NULL, NULL);
-
-  mech_area_set_surface_type (MECH_AREA (view), MECH_SURFACE_TYPE_GL);
 }
 
 MechArea *
