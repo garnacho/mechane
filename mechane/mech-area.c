@@ -894,6 +894,14 @@ _mech_area_set_window (MechArea   *area,
                        MechWindow *window)
 {
   g_object_set_qdata ((GObject *) area, quark_window, window);
+
+  if (mech_area_is_visible (area))
+    {
+      MechStage *stage;
+
+      stage = _mech_area_get_stage (area);
+      _mech_stage_notify_visibility_change (stage, area);
+    }
 }
 
 void
