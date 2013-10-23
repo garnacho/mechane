@@ -305,7 +305,6 @@ _mech_gl_view_update_seat_state (MechGLView *view,
       if (priv->grab_child && !new_grab &&
           child && child != priv->grab_child)
         {
-          g_print ("... lalala\n");
           /* Send motion event into the child below now that the grab is gone */
           _mech_gl_view_enter_child (view, event, child, child_x, child_y);
         }
@@ -342,6 +341,8 @@ mech_gl_view_handle_event (MechArea  *area,
   if (event->any.target != area ||
       mech_event_has_flags (event, MECH_EVENT_FLAG_CAPTURE_PHASE))
     return FALSE;
+
+  MECH_AREA_CLASS (mech_gl_view_parent_class)->handle_event (area, event);
 
   child_x = child_y = 0;
   priv = mech_gl_view_get_instance_private (view);
