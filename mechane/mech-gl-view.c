@@ -99,42 +99,59 @@ _mech_gl_view_update_children (MechGLView *view)
 
 /* XXX: Hack to cope with cairo not leaving "clean" GL settings */
 static void
-_gl_status_save (GLStatus *status)
+_gl_status_reset_defaults (void)
 {
+  glMatrixMode (GL_PROJECTION);
   glLoadIdentity();
+  glMatrixMode (GL_MODELVIEW);
+  glLoadIdentity();
+  glBlendFunc (GL_ONE, GL_ZERO);
+  glEnable (GL_DITHER);
+  glEnable (GL_MULTISAMPLE);
   glDisable (GL_STENCIL_TEST);
+  glDisable (GL_SCISSOR_TEST);
+  glDisable (GL_DEPTH_TEST);
+  glDisable (GL_DEPTH_CLAMP);
   glDisable (GL_BLEND);
+  glDisable (GL_NORMALIZE);
+  glEnable (GL_DITHER);
+  glDisable (GL_CLIP_DISTANCE0);
+  glDepthMask (GL_TRUE);
   glDepthFunc (GL_LESS);
   glColorMask (GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
   glLogicOp (GL_COPY);
   glDepthRange (0, 1);
-  glDepthMask (GL_TRUE);
   glStencilOp (GL_KEEP, GL_KEEP, GL_KEEP);
   glStencilFunc (GL_ALWAYS, 0, (GLuint) -1);
   glClearStencil (0);
+  glBindTexture (GL_TEXTURE_2D, 0);
+  glBindTexture (GL_TEXTURE_RECTANGLE, 0);
 
-  glGetIntegerv (GL_FRAMEBUFFER_BINDING, &status->prev_framebuffer);
   glBindFramebuffer (GL_FRAMEBUFFER, 0);
-
-  glGetIntegerv (GL_RENDERBUFFER_BINDING, &status->prev_renderbuffer);
   glBindRenderbuffer (GL_RENDERBUFFER, 0);
-
-  glGetIntegerv (GL_CURRENT_PROGRAM, &status->prev_program);
+  glUseProgram (0);
 }
 
 static void
-_gl_status_restore (GLStatus *status,
-                    MechArea *area)
+_gl_status_save (GLStatus *status)
 {
-  cairo_rectangle_t allocation;
+  glPushAttrib (GL_ALL_ATTRIB_BITS);
 
+  glGetIntegerv (GL_FRAMEBUFFER_BINDING, &status->prev_framebuffer);
+  glGetIntegerv (GL_RENDERBUFFER_BINDING, &status->prev_renderbuffer);
+  glGetIntegerv (GL_CURRENT_PROGRAM, &status->prev_program);
+
+  _gl_status_reset_defaults ();
+}
+
+static void
+_gl_status_restore (GLStatus *status)
+{
   glUseProgram (status->prev_program);
   glBindFramebuffer (GL_FRAMEBUFFER, status->prev_framebuffer);
   glBindRenderbuffer (GL_RENDERBUFFER, status->prev_renderbuffer);
 
-  mech_area_get_allocated_size (area, &allocation);
-  glViewport (0, 0, allocation.width, allocation.height);
-  glScissor (0, 0, allocation.width, allocation.height);
+  glPopAttrib ();
 }
 
 static void
@@ -164,8 +181,8 @@ mech_gl_view_draw (MechArea *area,
   g_signal_emit (area, signals[RENDER_SCENE], 0,
                  cairo_surface_get_device (surface));
 
-  glFlush();
-  _gl_status_restore (&gl_status, area);
+  glFlush ();
+  _gl_status_restore (&gl_status);
   cairo_surface_mark_dirty (surface);
 }
 
@@ -379,7 +396,7 @@ mech_gl_view_handle_event (MechArea  *area,
                          &event->pointer.x, &event->pointer.y);
         }
 
-      _gl_status_restore (&gl_status, area);
+      _gl_status_restore (&gl_status);
       _mech_surface_release (surface);
     }
 
