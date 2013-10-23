@@ -408,9 +408,12 @@ _mech_gl_box_render_children (MechGLBox *box,
   mech_area_get_allocated_size ((MechArea *) box, &allocation);
 
   glDepthFunc (GL_ALWAYS);
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
   glFrustum (-allocation.width / 2, allocation.width / 2,
              -allocation.height / 2, allocation.height / 2,
              NEAR_PLANE_DISTANCE - 0.001, 200);
+  glMatrixMode(GL_MODELVIEW);
 
   for (i = 0; i < n_children; i++)
     {
