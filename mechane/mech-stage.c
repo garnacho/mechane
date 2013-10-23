@@ -293,7 +293,7 @@ _surface_check_children (OffscreenNode *offscreen,
     }
 }
 
-void
+static void
 _mech_stage_check_update_surface (MechStage *stage,
                                   MechArea  *area)
 {
@@ -1106,6 +1106,10 @@ _mech_stage_set_root_surface (MechStage   *stage,
   offscreen->node.data = g_object_ref (surface);
   _surface_check_children (offscreen, offscreen);
   _mech_stage_invalidate (stage, NULL, NULL, FALSE);
+
+  if (priv->areas &&
+      mech_area_is_visible (priv->areas->node.data))
+    _mech_stage_notify_visibility_change (stage, priv->areas->node.data);
 }
 
 static gboolean
