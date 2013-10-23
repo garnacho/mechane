@@ -41,16 +41,17 @@ _mech_gl_container_update_surface (MechGLContainer *container)
 {
   MechSurface *parent_surface, *surface = NULL;
   MechGLContainerPrivate *priv;
-  MechBackend *backend;
-  MechWindow *window;
-  MechStage *stage;
 
   priv = mech_gl_container_get_instance_private (container);
-  stage = _mech_area_get_stage (priv->parent);
 
-  if (stage)
+  if (priv->parent && mech_area_is_visible (priv->parent))
     {
+      MechBackend *backend;
+      MechWindow *window;
+      MechStage *stage;
+
       backend = mech_backend_get ();
+      stage = _mech_area_get_stage (priv->parent);
       parent_surface = _mech_stage_get_rendering_surface (stage, priv->parent);
 
       if (_mech_surface_get_renderer_type (parent_surface) == MECH_RENDERER_TYPE_GL)
@@ -59,20 +60,28 @@ _mech_gl_container_update_surface (MechGLContainer *container)
                                                  MECH_SURFACE_TYPE_OFFSCREEN);
           g_initable_init (G_INITABLE (surface), NULL, NULL);
         }
-      else
-        g_warning ("Parent of GL container %p has not a GL surface type",
-                   container);
 
+      _mech_container_set_surface (MECH_CONTAINER (container), surface);
       window = mech_area_get_window (priv->parent);
       _mech_area_set_window (priv->area, window);
     }
-
-  _mech_container_set_surface (MECH_CONTAINER (container), surface);
+  else
+    {
+      _mech_container_set_surface (MECH_CONTAINER (container), NULL);
+      _mech_area_set_window (priv->area, NULL);
+    }
 
   if (priv->surface)
     g_object_unref (priv->surface);
 
   priv->surface = surface;
+}
+
+static void
+_parent_visibility_changed (MechArea        *parent,
+                            MechGLContainer *container)
+{
+  _mech_gl_container_update_surface (container);
 }
 
 static void
@@ -87,10 +96,20 @@ _mech_gl_container_set_parent (MechGLContainer *container,
   if (priv->parent == parent)
     return;
 
+  if (priv->parent)
+    g_signal_handlers_disconnect_by_data (priv->parent, container);
+
   priv->parent = parent;
 
   if (priv->parent)
-    _mech_gl_container_update_surface (container);
+    {
+      g_signal_connect_after (priv->parent, "visibility-changed",
+                              G_CALLBACK (_parent_visibility_changed),
+                              container);
+
+      if (mech_area_is_visible (priv->parent))
+        _mech_gl_container_update_surface (container);
+    }
 }
 
 static void
