@@ -2157,6 +2157,8 @@ mech_area_get_surface_type (MechArea *area)
 MechSurfaceType
 mech_area_get_effective_surface_type (MechArea *area)
 {
+  MechContainer *container;
+  MechSurface *surface;
   GNode *node;
 
   g_return_val_if_fail (MECH_IS_AREA (area), MECH_SURFACE_TYPE_NONE);
@@ -2173,10 +2175,30 @@ mech_area_get_effective_surface_type (MechArea *area)
           type != MECH_SURFACE_TYPE_OFFSCREEN)
         return type;
 
+      if (!node->parent)
+        break;
+
       node = node->parent;
     }
 
-  return MECH_SURFACE_TYPE_NONE;
+  container = _mech_area_get_container (area);
+
+  if (container)
+    {
+      MechRendererType renderer_type;
+
+      surface = _mech_container_get_surface (container);
+      renderer_type = _mech_surface_get_renderer_type (surface);
+
+      if (renderer_type == MECH_RENDERER_TYPE_GL)
+        return MECH_SURFACE_TYPE_GL;
+      else if (renderer_type == MECH_RENDERER_TYPE_SOFTWARE)
+        return MECH_SURFACE_TYPE_SOFTWARE;
+      else
+        g_assert_not_reached ();
+    }
+  else
+    return MECH_SURFACE_TYPE_NONE;
 }
 
 /* Interface delegates */
