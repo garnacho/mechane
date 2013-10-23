@@ -218,6 +218,8 @@ mech_surface_wayland_texture_set_size (MechSurface *surface,
                                          CAIRO_CONTENT_COLOR_ALPHA,
                                          priv->texture_id,
                                          width, height);
+  cairo_surface_set_device_scale (priv->surface, 1, -1);
+  cairo_surface_set_device_offset (priv->surface, 0, height);
   priv->width = width;
   priv->height = height;
   priv->initialized = FALSE;

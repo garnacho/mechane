@@ -83,7 +83,7 @@ static const gchar *picking_fragment_shader =
   "in vec2 v_tex_coord;\n"
   "void main () {\n"
   "  vec4 color;\n"
-  "  color.rgba = vec4 (child_id, v_tex_coord.s, v_tex_coord.t, 1);\n"
+  "  color.rgba = vec4 (child_id, v_tex_coord.s, 1 - v_tex_coord.t, 1);\n"
   "  gl_FragColor = color;\n"
   "}";
 
@@ -164,16 +164,16 @@ _mech_gl_box_update_child_vbo (ChildData         *data,
                                cairo_rectangle_t  allocation)
 {
   GLfloat triangles_data[] = {
+    0, allocation.height, 0,
     0, 0, 0,
-    0, -allocation.height, 0,
-    allocation.width, 0, 0,
-    allocation.width, -allocation.height, 0
+    allocation.width, allocation.height, 0,
+    allocation.width, 0, 0
   };
   GLfloat tex_vertices[] = {
-    0, 0,
     0, 1,
-    1, 0,
+    0, 0,
     1, 1,
+    1, 0
   };
 
   if (data->vbo)
@@ -426,7 +426,7 @@ _mech_gl_box_render_children (MechGLBox *box,
 
       glPushMatrix ();
       g_signal_emit (box, signals[POSITION_CHILD], 0, children[i]);
-      glTranslatef (-allocation.width / 2, allocation.height / 2,
+      glTranslatef (-allocation.width / 2, -allocation.height / 2,
                     -NEAR_PLANE_DISTANCE);
 
       _apply_uniforms (program_id, 0, data->id);
