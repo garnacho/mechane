@@ -234,6 +234,17 @@ mech_surface_wayland_texture_get_age (MechSurface *surface)
 }
 
 static void
+mech_surface_wayland_texture_render (MechSurface *surface,
+                                     cairo_t     *cr)
+{
+  MechSurfaceClass *surface_class;
+
+  surface_class = MECH_SURFACE_CLASS (mech_surface_wayland_texture_parent_class);
+  surface_class->render (surface, cr);
+  cairo_surface_flush (cairo_get_target (cr));
+}
+
+static void
 mech_surface_wayland_texture_class_init (MechSurfaceWaylandTextureClass *klass)
 {
   MechSurfaceWaylandClass *surface_wayland_class;
@@ -250,6 +261,7 @@ mech_surface_wayland_texture_class_init (MechSurfaceWaylandTextureClass *klass)
   surface_class->get_surface = mech_surface_wayland_texture_get_surface;
   surface_class->set_size = mech_surface_wayland_texture_set_size;
   surface_class->get_age = mech_surface_wayland_texture_get_age;
+  surface_class->render = mech_surface_wayland_texture_render;
 
   g_object_class_install_property (object_class,
                                    PROP_TEXTURE_ID,
