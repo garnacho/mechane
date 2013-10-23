@@ -2122,7 +2122,6 @@ mech_area_set_surface_type (MechArea        *area,
                             MechSurfaceType  surface_type)
 {
   MechAreaPrivate *priv;
-  MechStage *stage;
 
   g_return_val_if_fail (MECH_IS_AREA (area), FALSE);
   g_return_val_if_fail (surface_type >= MECH_SURFACE_TYPE_NONE &&
@@ -2134,13 +2133,7 @@ mech_area_set_surface_type (MechArea        *area,
     return;
 
   priv->surface_type = surface_type;
-  stage = _mech_area_get_stage (area);
-
-  if (stage)
-    {
-      _mech_stage_check_update_surface (stage, area);
-      _mech_stage_invalidate (stage, area, NULL, FALSE);
-    }
+  mech_area_redraw (area, NULL);
 }
 
 MechSurfaceType
