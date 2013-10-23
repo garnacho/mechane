@@ -634,6 +634,7 @@ _mech_container_set_surface (MechContainer *container,
       priv->surface = g_object_ref (surface);
       g_object_set (surface, "area", priv->root, NULL);
       _mech_stage_set_root_surface (priv->stage, surface);
+      mech_container_queue_redraw (container);
     }
 }
 
