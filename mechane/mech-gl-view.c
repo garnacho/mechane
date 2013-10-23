@@ -47,6 +47,9 @@ struct _MechGLViewPrivate
   MechArea *pointer_child;
   MechArea *grab_child;
   GHashTable *touch_children;
+  GLuint fbo;
+  GLuint depth_rbo;
+  GLuint texture_id;
 };
 
 static guint signals[N_SIGNALS] = { 0 };
@@ -54,11 +57,24 @@ static guint signals[N_SIGNALS] = { 0 };
 G_DEFINE_TYPE_WITH_PRIVATE (MechGLView, mech_gl_view, MECH_TYPE_AREA)
 
 static void
+_mech_gl_view_unset_fbo (MechGLView *view)
+{
+  MechGLViewPrivate *priv;
+
+  priv = mech_gl_view_get_instance_private (view);
+  glDeleteRenderbuffers (1, &priv->depth_rbo);
+  glDeleteFramebuffers (1, &priv->fbo);
+  priv->fbo = 0;
+}
+
+static void
 mech_gl_view_finalize (GObject *object)
 {
   MechGLViewPrivate *priv;
 
   priv = mech_gl_view_get_instance_private ((MechGLView *) object);
+
+  _mech_gl_view_unset_fbo ((MechGLView *) object);
   g_hash_table_unref (priv->children);
   g_hash_table_unref (priv->touch_children);
   G_OBJECT_CLASS (mech_gl_view_parent_class)->finalize (object);
@@ -95,6 +111,80 @@ _mech_gl_view_update_children (MechGLView *view)
       mech_container_queue_resize (value, width, height);
       mech_container_process_updates (value);
     }
+}
+
+static guint
+_mech_gl_view_get_texture_id (MechGLView *view)
+{
+  MechArea *area = (MechArea *) view;
+  MechSurface *surface;
+  guint texture_id = 0;
+  MechStage *stage;
+
+  stage = _mech_area_get_stage (area);
+
+  if (!stage)
+    return 0;
+
+  surface = _mech_stage_get_rendering_surface (stage, area);
+
+  if (g_object_class_find_property (G_OBJECT_GET_CLASS (surface),
+                                    "texture-id"))
+    g_object_get (surface, "texture-id", &texture_id, NULL);
+
+  return texture_id;
+}
+
+static void
+_mech_gl_view_check_update_fbo (MechGLView *view)
+{
+  MechSurfaceType surface_type;
+  MechGLViewPrivate *priv;
+  guint texture_id = 0;
+  MechArea *area;
+
+  area = (MechArea *) view;
+  priv = mech_gl_view_get_instance_private (view);
+  surface_type = mech_area_get_surface_type (area);
+  texture_id = _mech_gl_view_get_texture_id (view);
+
+  if ((!priv->fbo || priv->texture_id != texture_id) &&
+      surface_type == MECH_SURFACE_TYPE_OFFSCREEN && texture_id)
+    {
+      cairo_rectangle_t allocation;
+      GLuint status;
+
+      if (priv->fbo)
+        _mech_gl_view_unset_fbo (view);
+
+      mech_area_get_allocated_size (area, &allocation);
+
+      glGenRenderbuffers (1, &priv->depth_rbo);
+      glBindRenderbuffer (GL_RENDERBUFFER, priv->depth_rbo);
+      glRenderbufferStorage (GL_RENDERBUFFER, GL_DEPTH_COMPONENT16,
+                             (GLsizei) allocation.width,
+                             (GLsizei) allocation.height);
+      glBindRenderbuffer (GL_RENDERBUFFER, 0);
+
+      glGenFramebuffers (1, &priv->fbo);
+      glBindFramebuffer (GL_FRAMEBUFFER, priv->fbo);
+      glFramebufferTexture2D (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                              GL_TEXTURE_2D, texture_id, 0);
+      glFramebufferRenderbuffer (GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                                 GL_RENDERBUFFER, priv->depth_rbo);
+      status = glCheckFramebufferStatus (GL_FRAMEBUFFER);
+      glBindFramebuffer (GL_FRAMEBUFFER, 0);
+
+      if (status == GL_FRAMEBUFFER_COMPLETE)
+        priv->texture_id = texture_id;
+      else
+        {
+          g_warning ("Could not create FBO, status: %x", status);
+          _mech_gl_view_unset_fbo (view);
+        }
+    }
+  else if (priv->fbo && surface_type != MECH_SURFACE_TYPE_OFFSCREEN)
+    _mech_gl_view_unset_fbo (view);
 }
 
 /* XXX: Hack to cope with cairo not leaving "clean" GL settings */
@@ -170,11 +260,14 @@ mech_gl_view_draw (MechArea *area,
   if (cairo_surface_get_type (surface) != CAIRO_SURFACE_TYPE_GL)
     return;
 
+  cairo_surface_flush (surface);
   _mech_gl_view_update_children ((MechGLView *) area);
-
   _gl_status_save (&gl_status);
 
-  glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+  _mech_gl_view_check_update_fbo ((MechGLView *) area);
+  glBindFramebuffer (GL_FRAMEBUFFER, priv->fbo);
+
+  glClear (GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
   glViewport (0, 0, allocation.width, allocation.height);
   glScissor (0, 0, allocation.width, allocation.height);
 
@@ -552,6 +645,7 @@ mech_gl_view_init (MechGLView *view)
   priv->children = g_hash_table_new_full (NULL, NULL, NULL,
                                           (GDestroyNotify) g_object_unref);
   priv->touch_children = g_hash_table_new (NULL, NULL);
+  mech_area_set_clip ((MechArea *) view, TRUE);
 }
 
 MechArea *
