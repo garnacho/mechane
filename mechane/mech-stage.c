@@ -209,6 +209,32 @@ _mech_stage_create_offscreen_node (MechStage *stage,
 }
 
 static void
+_offscreen_node_free (OffscreenNode *offscreen)
+{
+  OffscreenNode *next;
+
+  while (offscreen)
+    {
+      next = (OffscreenNode *) offscreen->node.next;
+
+      if (offscreen->node.children)
+        _offscreen_node_free ((OffscreenNode *) offscreen->node.children);
+
+      g_free (offscreen);
+      offscreen = next;
+    }
+}
+
+static void
+_offscreen_node_destroy (OffscreenNode *offscreen)
+{
+  if (!G_NODE_IS_ROOT ((GNode *) offscreen))
+    g_node_unlink ((GNode *) offscreen);
+
+  _offscreen_node_free (offscreen);
+}
+
+static void
 _mech_stage_destroy_offscreen_node (OffscreenNode *offscreen,
                                     gboolean       recurse)
 {
@@ -242,8 +268,7 @@ _mech_stage_destroy_offscreen_node (OffscreenNode *offscreen,
       g_object_unref (offscreen->node.data);
     }
 
-  g_node_unlink ((GNode *) offscreen);
-  g_node_destroy ((GNode *) offscreen);
+  _offscreen_node_destroy (offscreen);
 }
 
 static void
@@ -698,7 +723,7 @@ mech_stage_finalize (GObject *object)
       g_node_traverse ((GNode *) priv->offscreens, G_POST_ORDER,
                        G_TRAVERSE_ALL, -1, _stage_dispose_offscreens,
                        object);
-      g_node_destroy ((GNode *) priv->offscreens);
+      _offscreen_node_destroy (priv->offscreens);
     }
 
   G_OBJECT_CLASS (mech_stage_parent_class)->finalize (object);
