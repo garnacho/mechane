@@ -347,7 +347,8 @@ _calculate_cache_size (MechSurface *surface,
   priv = mech_surface_get_instance_private (surface);
   mech_area_get_allocated_size (priv->area, &allocation);
 
-  if (priv->surface_type == MECH_SURFACE_TYPE_OFFSCREEN)
+  if (!mech_area_get_clip (priv->area) &&
+      priv->surface_type == MECH_SURFACE_TYPE_OFFSCREEN)
     extra_pixels = EXTRA_PIXELS;
 
   if (!_mech_area_get_node (priv->area)->parent)
@@ -531,7 +532,8 @@ _mech_surface_update_cached_rect (MechSurface       *surface,
   if (dy)
     *dy = 0;
 
-  if (priv->surface_type == MECH_SURFACE_TYPE_OFFSCREEN)
+  if (!mech_area_get_clip (priv->area) &&
+      priv->surface_type == MECH_SURFACE_TYPE_OFFSCREEN)
     extra_pixels = EXTRA_PIXELS;
 
   if (!_mech_area_get_node (priv->area)->parent)
