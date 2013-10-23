@@ -54,9 +54,9 @@ DemoData demos[] = {
   { "GL box",
     "gl-box.c",
     "MechGLBox implements basic rendering capabilities of child areas onto "
-    "GL textures. Each of those textures has an associated position/matrix, "
-    "which is used in order to render children on a GL scene, and to pick "
-    "the right child on pointer events.",
+    "GL textures. The position at which those textures are rendered is decided "
+    "in the 'position-child' vmethod. MechGLBox also implements child picking "
+    "and translation of coordinates for pointer events.",
     demo_gl_box
   }
 };
