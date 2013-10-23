@@ -1702,7 +1702,8 @@ mech_area_get_visible (MechArea *area)
 gboolean
 mech_area_is_visible (MechArea *area)
 {
-  MechWindow *window = NULL;
+  MechContainer *container;
+  MechWindow *window;
   GNode *node;
 
   node = _mech_area_get_node (area);
@@ -1713,12 +1714,19 @@ mech_area_is_visible (MechArea *area)
         return FALSE;
 
       if (!node->parent)
-        window = mech_area_get_window (node->data);
+        break;
 
       node = node->parent;
     }
 
-  if (!window)
+  container = _mech_area_get_container (node->data);
+
+  if (!container || !_mech_container_get_surface (container))
+    return FALSE;
+
+  window = mech_area_get_window (node->data);
+
+  if (!window || !_mech_container_get_surface ((MechContainer *) window))
     return FALSE;
 
   return mech_window_get_visible (window);
