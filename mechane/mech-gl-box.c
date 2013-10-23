@@ -415,6 +415,9 @@ _mech_gl_box_render_children (MechGLBox *box,
              NEAR_PLANE_DISTANCE - 0.001, 200);
   glMatrixMode(GL_MODELVIEW);
 
+  glEnable (GL_BLEND);
+  glBlendFunc (GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+
   for (i = 0; i < n_children; i++)
     {
       data = _mech_gl_box_lookup_child_data ((MechGLBox *) box, children[i]);
@@ -453,6 +456,8 @@ _mech_gl_box_render_children (MechGLBox *box,
 
       glPopMatrix ();
     }
+
+  glDisable (GL_BLEND);
 
   g_free (children);
 }
