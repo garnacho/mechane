@@ -29,76 +29,53 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
-
 #include <GL/gl.h>
-#include <EGL/egl.h>
-#include <EGL/eglext.h>
-#include <cairo-gl.h>
 
-static const EGLint gl_config_attributes[] = {
-  EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-  EGL_RED_SIZE, 8,
-  EGL_GREEN_SIZE, 8,
-  EGL_BLUE_SIZE, 8,
-  EGL_ALPHA_SIZE, 8,
-  EGL_DEPTH_SIZE, 24,
-  EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT,
-  EGL_NONE
+struct gears
+{
+  GLfloat angle;
+
+  struct {
+    GLfloat rotx;
+    GLfloat roty;
+  } view;
+
+  GLint gear_list[3];
 };
 
-struct gears {
-	struct window *window;
-	struct widget *widget;
-
-	struct display *d;
-
-	EGLDisplay display;
-	EGLDisplay config;
-	EGLContext context;
-	GLfloat angle;
-
-	struct {
-		GLfloat rotx;
-		GLfloat roty;
-	} view;
-
-	int button_down;
-	int last_x, last_y;
-
-	GLint gear_list[3];
-	int fullscreen;
-	int frames;
-	uint32_t last_fps;
-};
-
-struct gear_template {
-	GLfloat material[4];
-	GLfloat inner_radius;
-	GLfloat outer_radius;
-	GLfloat width;
-	GLint teeth;
-	GLfloat tooth_depth;
+struct gear_template
+{
+  GLfloat material[4];
+  GLfloat inner_radius;
+  GLfloat outer_radius;
+  GLfloat width;
+  GLint teeth;
+  GLfloat tooth_depth;
 };
 
 static const struct gear_template gear_templates[] = {
-	{ { 0.8, 0.1, 0.0, 1.0 }, 1.0, 4.0, 1.0, 20, 0.7 },
-	{ { 0.0, 0.8, 0.2, 1.0 }, 0.5, 2.0, 2.0, 10, 0.7 },
-	{ { 0.2, 0.2, 1.0, 1.0 }, 1.3, 2.0, 0.5, 10, 0.7 }, 
+  { { 0.8, 0.1, 0.0, 1.0 }, 1.0, 4.0, 1.0, 20, 0.7 },
+  { { 0.0, 0.8, 0.2, 1.0 }, 0.5, 2.0, 2.0, 10, 0.7 },
+  { { 0.2, 0.2, 1.0, 1.0 }, 1.3, 2.0, 0.5, 10, 0.7 },
 };
 
 static GLfloat light_pos[4] = {5.0, 5.0, 10.0, 0.0};
 
 typedef struct {
-  MechButton parent_instance;
+  MechGLView parent_instance;
   MechAnimation *animation;
   struct gears *gears;
-} EglArea;
+  gdouble last_x;
+  gdouble last_y;
+  guint moving     : 1;
+  guint has_coords : 1;
+} GearsArea;
 
 typedef struct {
-  MechButtonClass parent_class;
-} EglAreaClass;
+  MechGLViewClass parent_class;
+} GearsAreaClass;
 
-G_DEFINE_TYPE (EglArea, egl_area, MECH_TYPE_BUTTON)
+G_DEFINE_TYPE (GearsArea, gears_area, MECH_TYPE_GL_VIEW)
 
 static void
 make_gear(const struct gear_template *t)
@@ -227,40 +204,12 @@ make_gear(const struct gear_template *t)
 }
 
 static struct gears *
-gears_create (cairo_device_t *device,
-              EGLContext     *prev_context,
-              EGLSurface     *surface)
+gears_create (void)
 {
   struct gears *gears;
   gint i, n_configs;
 
   gears = g_new0 (struct gears, 1);
-
-  eglBindAPI(EGL_OPENGL_API);
-
-  gears->display = cairo_egl_device_get_display (device);
-
-  if (eglChooseConfig (gears->display, gl_config_attributes,
-                       &gears->config, 1, &n_configs) == EGL_FALSE)
-    {
-      g_warning ("Could not choose config");
-      return NULL;
-    }
-
-  gears->context = eglCreateContext(gears->display, gears->config,
-                                    prev_context, NULL);
-
-  if (!gears->context)
-    {
-      g_warning ("Could not create context");
-      return NULL;
-    }
-
-  if (!eglMakeCurrent(gears->display, surface, surface, gears->context))
-    {
-      g_warning ("Could not make current");
-      return NULL;
-    }
 
   for (i = 0; i < 3; i++)
     {
@@ -270,27 +219,8 @@ gears_create (cairo_device_t *device,
       glEndList();
     }
 
-  gears->button_down = 0;
-  gears->last_x = 0;
-  gears->last_y = 0;
-
   gears->view.rotx = 20.0;
   gears->view.roty = 30.0;
-
-
-  glEnable(GL_NORMALIZE);
-
-  glMatrixMode(GL_PROJECTION);
-  glLoadIdentity();
-  glFrustum(-1.0, 1.0, -1.0, 1.0, 5.0, 200.0);
-  glMatrixMode(GL_MODELVIEW);
-
-  glLightfv(GL_LIGHT0, GL_POSITION, light_pos);
-  glEnable(GL_CULL_FACE);
-  glEnable(GL_LIGHTING);
-  glEnable(GL_LIGHT0);
-  glEnable(GL_DEPTH_TEST);
-  glClearColor(0, 0, 0, 0);
 
   return gears;
 }
@@ -300,75 +230,70 @@ animation_frame (MechAnimation *animation,
                  gint64         _time,
                  gpointer       user_data)
 {
+  GearsArea *gears_area = user_data;
+  struct gears *gears = gears_area->gears;
+
+  if (gears)
+    gears->angle = (GLfloat) ((_time / 1000) % 8192) * 360 / 8192.0;
+
   mech_area_redraw (user_data, NULL);
 }
 
 static void
-egl_area_visibility_changed (MechArea *area)
+gears_area_visibility_changed (MechArea *area)
 {
+  GearsArea *gears_area;
   MechWindow *window;
-  EglArea *egl_area;
   gboolean visible;
 
-  egl_area = (EglArea *) area;
+  gears_area = (GearsArea *) area;
   visible = mech_area_is_visible (area);
   window = mech_area_get_window (area);
 
-  if (!visible && egl_area->animation)
-    g_clear_object (&egl_area->animation);
+  MECH_AREA_CLASS (gears_area_parent_class)->visibility_changed (area);
+
+  if (!visible && gears_area->animation)
+    g_clear_object (&gears_area->animation);
   else if (visible && window)
     {
       /* No timeline yet, meh */
-      egl_area->animation = mech_acceleration_new (0, 0, 1);
-      mech_animation_run (egl_area->animation,
+      gears_area->animation = mech_acceleration_new (0, 0, 1);
+      mech_animation_run (gears_area->animation,
                           mech_area_get_window (area));
-      g_signal_connect (egl_area->animation, "frame",
+      g_signal_connect (gears_area->animation, "frame",
                         G_CALLBACK (animation_frame), area);
     }
 }
 
 static void
-egl_area_draw (MechArea *area,
-               cairo_t  *cr)
+gears_area_render_scene (MechGLView     *view,
+                         cairo_device_t *device)
 {
-  cairo_rectangle_t allocation;
-  cairo_surface_t *surface;
-  cairo_device_t *device;
-  EGLContext *prev_context;
-  EGLSurface *prev_surface;
   struct gears *gears;
-  MechWindow *window;
-  EglArea *egl_area;
+  GearsArea *gears_area;
+  MechArea *area;
 
-  egl_area = (EglArea *) area;
-  window = mech_area_get_window (area);
+  gears_area = (GearsArea *) view;
+  area = (MechArea *) view;
 
-  surface = cairo_get_target (cr);
-  mech_area_get_allocated_size (area, &allocation);
+  if (!gears_area->gears)
+    gears_area->gears = gears_create ();
 
-  if (cairo_surface_get_type (surface) != CAIRO_SURFACE_TYPE_GL)
-    return;
+  gears = gears_area->gears;
 
-  device = cairo_surface_get_device (surface);
-  cairo_surface_flush (surface);
+  /* Set projection and settings */
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+  glFrustum(-1.0, 1.0, -1.0, 1.0, 5.0, 200.0);
+  glMatrixMode(GL_MODELVIEW);
 
-  prev_context = eglGetCurrentContext ();
-  prev_surface = eglGetCurrentSurface (EGL_DRAW);
+  glLightfv(GL_LIGHT0, GL_POSITION, light_pos);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_CULL_FACE);
+  glEnable(GL_DEPTH_TEST);
 
-  if (!egl_area->gears)
-    egl_area->gears = gears_create (device, prev_context, prev_surface);
-
-  gears = egl_area->gears;
-  eglMakeCurrent(gears->display,
-                 prev_surface, prev_surface,
-                 gears->context);
-
-  glViewport (0, 0, allocation.width, allocation.height);
-  glScissor (0, 0, allocation.width, allocation.height);
-
-  glEnable(GL_SCISSOR_TEST);
-  glClear(GL_DEPTH_BUFFER_BIT);
-
+  /* Render the gears */
   glPushMatrix();
 
   glTranslatef(0.0, 0.0, -38);
@@ -396,45 +321,103 @@ egl_area_draw (MechArea *area,
 
   glPopMatrix();
 
-  glFlush();
+  glDisable (GL_LIGHTING);
+  glDisable (GL_LIGHT0);
+  glDisable (GL_CULL_FACE);
+  glDisable (GL_DEPTH_TEST);
+}
 
-  eglMakeCurrent(gears->display, prev_surface, prev_surface, prev_context);
+static gboolean
+gears_area_handle_event (MechArea  *area,
+                         MechEvent *event)
+{
+  GearsArea *gears_area = (GearsArea *) area;
+  struct gears *gears = gears_area->gears;
+  gdouble x, y;
 
-  cairo_surface_mark_dirty (surface);
+  MECH_AREA_CLASS (gears_area_parent_class)->handle_event (area, event);
 
-  gears->angle = (GLfloat) ((g_get_monotonic_time () / 1000) % 8192) * 360 / 8192.0;
+  if (event->any.target != area ||
+      mech_event_has_flags (event, MECH_EVENT_FLAG_CAPTURE_PHASE))
+    return FALSE;
+
+  if (!gears)
+    return TRUE;
+
+  if (event->type == MECH_BUTTON_PRESS ||
+      event->type == MECH_TOUCH_DOWN)
+    {
+      gears_area->moving = TRUE;
+      gears_area->has_coords = FALSE;
+    }
+  else if (event->type == MECH_BUTTON_RELEASE ||
+           event->type == MECH_TOUCH_UP)
+    {
+      gears_area->moving = FALSE;
+      gears_area->has_coords = FALSE;
+    }
+  else if (gears_area->moving &&
+           (event->type == MECH_TOUCH_MOTION ||
+            event->type == MECH_MOTION))
+    {
+      mech_event_pointer_get_coords (event, &x, &y);
+
+      if (gears_area->has_coords)
+        {
+          /* Things are inverted here as the gears rotate
+           * along the given axis, so it looks more natural
+           * to rotate along the opposite axis when the mouse
+           * moves.
+           */
+          gears->view.roty += (x - gears_area->last_x);
+          gears->view.rotx += (y - gears_area->last_y);
+          mech_area_redraw (area, NULL);
+        }
+
+      gears_area->last_x = x;
+      gears_area->last_y = y;
+      gears_area->has_coords = TRUE;
+    }
+
+  return TRUE;
 }
 
 static void
-egl_area_class_init (EglAreaClass *klass)
+gears_area_class_init (GearsAreaClass *klass)
 {
   MechAreaClass *area_class = MECH_AREA_CLASS (klass);
+  MechGLViewClass *gl_view_class = MECH_GL_VIEW_CLASS (klass);
 
-  area_class->visibility_changed = egl_area_visibility_changed;
-  area_class->draw = egl_area_draw;
+  area_class->visibility_changed = gears_area_visibility_changed;
+  area_class->handle_event = gears_area_handle_event;
+
+  gl_view_class->render_scene = gears_area_render_scene;
 }
 
 static void
-egl_area_init (EglArea *area)
+gears_area_init (GearsArea *area)
 {
-  mech_area_set_clip (MECH_AREA (area), TRUE);
-  mech_area_set_surface_type (MECH_AREA (area), MECH_SURFACE_TYPE_GL);
+  mech_area_set_name (MECH_AREA (area), "button");
+  mech_area_add_events (MECH_AREA (area),
+                        MECH_CROSSING_MASK |
+                        MECH_MOTION_MASK |
+                        MECH_BUTTON_MASK);
 }
 
 static MechArea *
-egl_area_new (void)
+gears_area_new (void)
 {
-  return g_object_new (egl_area_get_type (), NULL);
+  return g_object_new (gears_area_get_type (), NULL);
 }
 
 MechArea *
-demo_egl (void)
+demo_gl (void)
 {
   MechArea *box, *button;
 
   box = mech_fixed_box_new ();
 
-  button = egl_area_new ();
+  button = gears_area_new ();
   mech_area_add (box, button);
 
   mech_fixed_box_attach (MECH_FIXED_BOX (box), button,
@@ -446,7 +429,7 @@ demo_egl (void)
   mech_fixed_box_attach (MECH_FIXED_BOX (box), button,
                          MECH_SIDE_BOTTOM, MECH_SIDE_BOTTOM, MECH_UNIT_PX, 150);
 
-  button = egl_area_new ();
+  button = gears_area_new ();
   mech_area_add (box, button);
 
   mech_fixed_box_attach (MECH_FIXED_BOX (box), button,

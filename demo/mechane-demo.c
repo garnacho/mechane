@@ -4,7 +4,7 @@
 #include "matrices.c"
 #include "scroll-box.c"
 #include "scroll-area.c"
-#include "egl.c"
+#include "gl.c"
 #include "gl-box.c"
 
 typedef struct _MechaneDemo MechaneDemo;
@@ -44,12 +44,12 @@ DemoData demos[] = {
     demo_scroll_area
   },
   { "EGL",
-    "egl.c",
+    "gl.c",
     "When hardware acceleration is available, Mechane can make use of it "
     "quite transparently. This demo defines an area that does GL rendering "
     "on the draw() handler, 2 instances are then created within overlapped "
     "buttons.",
-    demo_egl
+    demo_gl
   },
   { "GL box",
     "gl-box.c",
